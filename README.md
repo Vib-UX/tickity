@@ -67,6 +67,8 @@ sequenceDiagram
     App->>User: Event Stats & POAPs
 ```
 
+<img width="3306" height="2122" alt="image" src="https://github.com/user-attachments/assets/b5f08079-6802-47f8-9cde-0f2a5f3960b0" />
+
 ## Tech Stack
 
 - **Blockchain**: Etherlink (Tezos Layer 2)
