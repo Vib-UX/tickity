@@ -1,0 +1,18 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.20"
+optimizer = true
+optimizer_runs = 200
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[rpc_endpoints]
+etherlink_testnet = "https://node.ghostnet.etherlink.com"
+etherlink_mainnet = "https://node.mainnet.etherlink.com"
+
+# Etherscan verification not configured yet
+# [etherscan]
+# etherlink_testnet = { key = "YOUR_API_KEY" }
+# etherlink_mainnet = { key = "YOUR_API_KEY" }
