@@ -15,12 +15,12 @@
     "ios": {
       "supportsTablet": true
     },
+    "plugins": ["@reactvision/react-viro"],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.cryptokrotus.cna"
     },
     "web": {
