@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useRef } from "react";
+import React from "react";
 import {
   Dimensions,
   StyleSheet,
@@ -7,18 +7,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import SignInBottomSheet, {
-  SignInBottomSheetRef,
-} from "../../components/bottomsheet/SignInBottomSheet";
 
 const { width, height } = Dimensions.get("window");
 
 const SignIn = () => {
-  const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
-
   return (
     <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
-      <SignInBottomSheet ref={signInBottomSheetRef} />
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Welcome to</Text>
@@ -30,7 +24,7 @@ const SignIn = () => {
           <TouchableOpacity
             style={styles.signInButton}
             onPress={() => {
-              signInBottomSheetRef.current?.snapToIndex(0);
+              console.log("Sign In");
             }}
           >
             <Text style={styles.signInButtonText}>Sign In</Text>
