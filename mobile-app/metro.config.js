@@ -1,38 +1,19 @@
-const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
+const { getDefaultConfig } = require("expo/metro-config");
 
-/**
- * Metro configuration
- * https://facebook.github.io/metro/docs/configuration
- *
- * @type {import('metro-config').MetroConfig}
- */
+const config = getDefaultConfig(__dirname);
 
-const defaultConfig = getDefaultConfig(__dirname);
+// Add support for 3D model files
+config.resolver.assetExts.push(
+  "obj",
+  "mtl",
+  "dae",
+  "scn",
+  "gltf",
+  "glb",
+  "bin"
+);
 
-const config = {
-  transformer: {
-    getTransformOptions: async () => ({
-      transform: {
-        experimentalImportSupport: false,
-        inlineRequires: true,
-      },
-    }),
-  },
-  resolver: {
-    assetExts: [
-      ...defaultConfig.resolver.assetExts,
-      "obj",
-      "mtl",
-      "JPG",
-      "vrx",
-      "hdr",
-      "gltf",
-      "glb",
-      "bin",
-      "arobject",
-      "gif",
-    ],
-  },
-};
+// Add support for additional texture formats if needed
+config.resolver.assetExts.push("webp");
 
-module.exports = mergeConfig(defaultConfig, config);
+module.exports = config;
