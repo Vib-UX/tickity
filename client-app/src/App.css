@@ -1,0 +1,119 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  background: #1a1a1a;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", sans-serif;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #1a1a1a;
+  padding: 20px;
+  color: white;
+}
+
+.App-link {
+  color: #00ff7f;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff7f;
+}
+
+/* Loading animations */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #333;
+  border-top: 3px solid #00ff7f;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Etherlink theme colors */
+:root {
+  --etherlink-bg: #1a1a1a;
+  --etherlink-green: #00ff7f;
+  --etherlink-text: #ffffff;
+  --etherlink-text-secondary: #aaaaaa;
+  --etherlink-border: #333333;
+}
+
+/* Global button styles */
+.btn-primary {
+  background: var(--etherlink-green);
+  color: var(--etherlink-bg);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: #00e676;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--etherlink-text);
+  border: 2px solid var(--etherlink-green);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--etherlink-green);
+  color: var(--etherlink-bg);
+  transform: translateY(-2px);
+}
