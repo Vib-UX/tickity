@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "owner": "cryptokrotus",
     "icon": "./assets/icon.png",
+    "scheme": "comketankudikyal29expostarterkittypescript",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -29,7 +30,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cryptokrotus.expo-starter-kit-typescript"
+      "package": "com.cryptokrotus.expostarterkittypescript"
     },
     "web": {
       "favicon": "./assets/favicon.png"

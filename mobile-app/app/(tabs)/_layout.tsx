@@ -18,6 +18,7 @@ export default function TabLayout() {
         tabBarStyle: {
           height: 55, // Increased from default ~50px to 80px
         },
+        headerShown: false,
         tabBarShowLabel: false,
       }}
     >
