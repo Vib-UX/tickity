@@ -65,7 +65,6 @@ contract TestMarketplace is Script {
         uint256 startTime = block.timestamp + 30 days;
         uint256 endTime = startTime + 4 hours;
         string memory location = "Marketplace Arena";
-        uint256 totalTickets = 50;
         
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Marketplace Pass";
@@ -82,31 +81,31 @@ contract TestMarketplace is Script {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
             TICKITY_NFT
         );
 
-        console.log("  Test Event created at:", eventAddress);
+        console.log("  Event created at:", eventAddress);
+        console.log("  Start Time:", startTime);
+        console.log("  End Time:", endTime);
         console.log("  Ticket Price:", ticketPrices[0]);
-        console.log("  Max Tickets:", totalTickets);
+        console.log("  Max Tickets:", ticketQuantities[0]);
+        console.log("");
 
-        // Register event in NFT contract
-        console.log("Registering event in NFT contract...");
-        Event eventContract = Event(payable(eventAddress));
-        
+        // Create event in NFT contract
         nftContract.createEvent(
-            address(eventContract),
-            "Marketplace Test Event",
-            "A test event for marketplace functionality",
+            eventAddress,
+            eventName,
+            eventDescription,
             startTime,
             endTime,
-            "Marketplace Arena",
-            50
+            location
         );
         
+        // Set event ID in the event contract
+        Event eventContract = Event(payable(eventAddress));
         eventContract.setEventId(2);
 
         return eventAddress;

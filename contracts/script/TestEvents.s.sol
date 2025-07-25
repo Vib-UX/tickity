@@ -58,12 +58,11 @@ contract TestEvents is Script {
     }
 
     function createMusicConcert(EventFactory factory) internal {
-        string memory eventName = "Etherlink Music Festival 2024";
-        string memory eventDescription = "The biggest music festival on Etherlink blockchain featuring top artists and amazing performances!";
-        uint256 startTime = block.timestamp + 30 days;
-        uint256 endTime = startTime + 4 hours;
-        string memory location = "Etherlink Arena, Virtual World";
-        uint256 totalTickets = 1000;
+        string memory eventName = "Etherlink Music Festival";
+        string memory eventDescription = "Experience the biggest music festival on Etherlink with top artists from around the world!";
+        uint256 startTime = block.timestamp + 21 days;
+        uint256 endTime = startTime + 12 hours;
+        string memory location = "Etherlink Arena";
         
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "General Admission";
@@ -72,7 +71,7 @@ contract TestEvents is Script {
         ticketPrices[0] = 0.01 ether;
         
         uint256[] memory ticketQuantities = new uint256[](1);
-        ticketQuantities[0] = 1000;
+        ticketQuantities[0] = 1000; // Limited to 1000 tickets
 
         address eventAddress = factory.createEvent(
             eventName,
@@ -80,7 +79,6 @@ contract TestEvents is Script {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -91,7 +89,7 @@ contract TestEvents is Script {
         console.log("  Start Time:", startTime);
         console.log("  End Time:", endTime);
         console.log("  Ticket Price:", ticketPrices[0]);
-        console.log("  Max Tickets:", totalTickets);
+        console.log("  Max Tickets:", ticketQuantities[0]);
         console.log("");
     }
 
@@ -101,7 +99,6 @@ contract TestEvents is Script {
         uint256 startTime = block.timestamp + 14 days;
         uint256 endTime = startTime + 8 hours;
         string memory location = "Etherlink Innovation Hub";
-        uint256 totalTickets = 500;
         
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Developer Pass";
@@ -110,7 +107,7 @@ contract TestEvents is Script {
         ticketPrices[0] = 0.005 ether;
         
         uint256[] memory ticketQuantities = new uint256[](1);
-        ticketQuantities[0] = 500;
+        ticketQuantities[0] = 500; // Limited to 500 tickets
 
         address eventAddress = factory.createEvent(
             eventName,
@@ -118,7 +115,6 @@ contract TestEvents is Script {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -129,7 +125,7 @@ contract TestEvents is Script {
         console.log("  Start Time:", startTime);
         console.log("  End Time:", endTime);
         console.log("  Ticket Price:", ticketPrices[0]);
-        console.log("  Max Tickets:", totalTickets);
+        console.log("  Max Tickets:", ticketQuantities[0]);
         console.log("");
     }
 
@@ -139,7 +135,6 @@ contract TestEvents is Script {
         uint256 startTime = block.timestamp + 7 days;
         uint256 endTime = startTime + 3 hours;
         string memory location = "Etherlink Stadium";
-        uint256 totalTickets = 2000;
         
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Championship Pass";
@@ -148,7 +143,7 @@ contract TestEvents is Script {
         ticketPrices[0] = 0.02 ether;
         
         uint256[] memory ticketQuantities = new uint256[](1);
-        ticketQuantities[0] = 2000;
+        ticketQuantities[0] = 2000; // Limited to 2000 tickets
 
         address eventAddress = factory.createEvent(
             eventName,
@@ -156,7 +151,6 @@ contract TestEvents is Script {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -167,7 +161,7 @@ contract TestEvents is Script {
         console.log("  Start Time:", startTime);
         console.log("  End Time:", endTime);
         console.log("  Ticket Price:", ticketPrices[0]);
-        console.log("  Max Tickets:", totalTickets);
+        console.log("  Max Tickets:", ticketQuantities[0]);
         console.log("");
     }
 

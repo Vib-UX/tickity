@@ -39,17 +39,75 @@ contract TestTickets is Script {
         
         // Register the event in the NFT contract first
         nftContract.createEvent(
-            address(eventContract),
+            eventAddress,
             "Test Event for Ticket Testing",
             "A test event to verify ticket minting and purchasing functionality",
             1753479375, // startTime
             1753493775, // endTime
-            "Test Arena",
-            100 // totalTickets
+            "Test Arena"
         );
         
         // Set the event ID to match the NFT contract event ID (1)
         eventContract.setEventId(1);
+
+        // Create event in NFT contract
+        nftContract.createEvent(
+            eventAddress,
+            "Test Event for Ticket Testing",
+            "A test event to verify ticket minting and purchasing functionality",
+            1753479375, // startTime
+            1753493775, // endTime
+            "Test Arena"
+        );
+
+        console.log("  Event registered in NFT contract");
+        console.log("");
+
+        // Create event with dynamic minting
+        string memory eventName2 = "Dynamic Minting Event";
+        string memory eventDescription2 = "An event with dynamic ticket minting - no predetermined limits!";
+        uint256 startTime2 = block.timestamp + 10 days;
+        uint256 endTime2 = startTime2 + 6 hours;
+        string memory location2 = "Dynamic Arena";
+        
+        string[] memory ticketTypes2 = new string[](2);
+        ticketTypes2[0] = "VIP Pass";
+        ticketTypes2[1] = "General Admission";
+        
+        uint256[] memory ticketPrices2 = new uint256[](2);
+        ticketPrices2[0] = 0.05 ether;
+        ticketPrices2[1] = 0.02 ether;
+        
+        uint256[] memory ticketQuantities2 = new uint256[](2);
+        ticketQuantities2[0] = 100; // Limited VIP tickets
+        ticketQuantities2[1] = 0;   // Unlimited general tickets
+
+        address eventAddress2 = factory.createEvent(
+            eventName2,
+            eventDescription2,
+            startTime2,
+            endTime2,
+            location2,
+            ticketTypes2,
+            ticketPrices2,
+            ticketQuantities2,
+            TICKITY_NFT
+        );
+
+        console.log("  Dynamic Event created at:", eventAddress2);
+        console.log("  VIP Tickets: Limited to", ticketQuantities2[0]);
+        console.log("  General Tickets: Unlimited");
+        console.log("");
+
+        // Create event in NFT contract
+        nftContract.createEvent(
+            eventAddress2,
+            eventName2,
+            eventDescription2,
+            startTime2,
+            endTime2,
+            location2
+        );
 
         // Step 2: Test ticket purchasing
         console.log("Testing Ticket Purchasing...");
@@ -71,7 +129,6 @@ contract TestTickets is Script {
         uint256 startTime = block.timestamp + 7 days;
         uint256 endTime = startTime + 4 hours;
         string memory location = "Test Arena";
-        uint256 totalTickets = 100;
         
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Test Pass";
@@ -80,7 +137,7 @@ contract TestTickets is Script {
         ticketPrices[0] = 0.001 ether; // Low price for testing
         
         uint256[] memory ticketQuantities = new uint256[](1);
-        ticketQuantities[0] = 100;
+        ticketQuantities[0] = 100; // Limited to 100 tickets
 
         address eventAddress = factory.createEvent(
             eventName,
@@ -88,7 +145,6 @@ contract TestTickets is Script {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -97,7 +153,7 @@ contract TestTickets is Script {
 
         console.log("  Test Event created at:", eventAddress);
         console.log("  Ticket Price:", ticketPrices[0]);
-        console.log("  Max Tickets:", totalTickets);
+        console.log("  Max Tickets:", ticketQuantities[0]);
         console.log("");
 
         return eventAddress;

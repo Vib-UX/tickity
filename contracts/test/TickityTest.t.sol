@@ -76,7 +76,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60, // total tickets
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -86,7 +85,6 @@ contract TickityTest is Test {
         Event newEventContract = Event(payable(eventAddress));
         assertEq(newEventContract.name(), "Test Event");
         assertEq(newEventContract.organizer(), organizer);
-        assertEq(newEventContract.totalTickets(), 60);
         
         vm.stopPrank();
     }
@@ -100,7 +98,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -117,13 +114,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        // Set event ID in event contract
-        vm.prank(address(factoryContract));
-        newEventContract.setEventId(1);
         
         // Purchase ticket
         vm.startPrank(buyer);
@@ -146,7 +138,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -162,12 +153,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        testEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         testEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -195,7 +182,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -211,12 +197,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        marketplaceEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         marketplaceEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -241,7 +223,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -257,12 +238,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        purchaseEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         purchaseEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -291,7 +268,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -307,12 +283,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        offerEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         offerEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -339,7 +311,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -355,12 +326,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        refundEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         refundEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -375,9 +342,9 @@ contract TickityTest is Test {
     }
     
     function test_RevertWhen_PurchaseAfterSoldOut() public {
-        // Create event with only 1 ticket
+        // Create event with only 1 ticket for VIP type
         ticketQuantities[0] = 1;
-        ticketQuantities[1] = 0;
+        ticketQuantities[1] = 0; // Unlimited general tickets
         
         vm.startPrank(organizer);
         address payable eventAddress = payable(factoryContract.createEvent(
@@ -386,7 +353,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            1,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -402,22 +368,23 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            1
+            "Test Location"
         );
         
-        vm.prank(address(factoryContract));
-        soldOutEventContract.setEventId(1);
-        
-        // Purchase first ticket
+        // Purchase first VIP ticket
         vm.startPrank(buyer);
         soldOutEventContract.purchaseTicket{value: 0.1 ether}(0);
         vm.stopPrank();
         
-        // Try to purchase second ticket (should fail)
+        // Try to purchase second VIP ticket (should fail)
         vm.startPrank(buyer2);
         vm.expectRevert();
         soldOutEventContract.purchaseTicket{value: 0.1 ether}(0);
+        vm.stopPrank();
+        
+        // But should be able to purchase unlimited general tickets
+        vm.startPrank(buyer2);
+        soldOutEventContract.purchaseTicket{value: 0.05 ether}(1);
         vm.stopPrank();
     }
     
@@ -430,7 +397,6 @@ contract TickityTest is Test {
             block.timestamp + 1 days,
             block.timestamp + 2 days,
             "Test Location",
-            60,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -446,12 +412,8 @@ contract TickityTest is Test {
             "A test event",
             block.timestamp + 1 days,
             block.timestamp + 2 days,
-            "Test Location",
-            60
+            "Test Location"
         );
-        
-        vm.prank(address(factoryContract));
-        doubleUseEventContract.setEventId(1);
         
         vm.startPrank(buyer);
         doubleUseEventContract.purchaseTicket{value: 0.05 ether}(1);
@@ -466,6 +428,110 @@ contract TickityTest is Test {
         vm.expectRevert();
         doubleUseEventContract.useTicket(1);
         
+        vm.stopPrank();
+    }
+
+    function test_DynamicMinting() public {
+        // Create event with unlimited tickets (quantity = 0 means unlimited)
+        uint256[] memory unlimitedQuantities = new uint256[](2);
+        unlimitedQuantities[0] = 0; // Unlimited VIP tickets
+        unlimitedQuantities[1] = 0; // Unlimited general tickets
+        
+        vm.startPrank(organizer);
+        address payable eventAddress = payable(factoryContract.createEvent(
+            "Dynamic Event",
+            "An event with unlimited ticket minting",
+            block.timestamp + 1 days,
+            block.timestamp + 2 days,
+            "Dynamic Arena",
+            ticketTypes,
+            ticketPrices,
+            unlimitedQuantities,
+            address(nftContract)
+        ));
+        Event dynamicEventContract = Event(payable(eventAddress));
+        vm.stopPrank();
+        
+        vm.prank(owner);
+        nftContract.createEvent(
+            address(dynamicEventContract),
+            "Dynamic Event",
+            "An event with unlimited ticket minting",
+            block.timestamp + 1 days,
+            block.timestamp + 2 days,
+            "Dynamic Arena"
+        );
+        
+        // Purchase many tickets to test unlimited minting
+        vm.startPrank(buyer);
+        uint256 ticketsToBuy = 10;
+        
+        for (uint256 i = 0; i < ticketsToBuy; i++) {
+            dynamicEventContract.purchaseTicket{value: 0.05 ether}(1); // General ticket
+        }
+        
+        assertEq(dynamicEventContract.soldTickets(), ticketsToBuy);
+        assertEq(nftContract.balanceOf(buyer), ticketsToBuy);
+        
+        vm.stopPrank();
+        
+        // Test that we can still buy more tickets (unlimited)
+        vm.startPrank(buyer2);
+        dynamicEventContract.purchaseTicket{value: 0.05 ether}(1);
+        assertEq(dynamicEventContract.soldTickets(), ticketsToBuy + 1);
+        vm.stopPrank();
+    }
+    
+    function test_MixedTicketLimits() public {
+        // Create event with mixed limits: limited VIP, unlimited general
+        uint256[] memory mixedQuantities = new uint256[](2);
+        mixedQuantities[0] = 5;  // Only 5 VIP tickets
+        mixedQuantities[1] = 0;  // Unlimited general tickets
+        
+        vm.startPrank(organizer);
+        address payable eventAddress = payable(factoryContract.createEvent(
+            "Mixed Limits Event",
+            "An event with mixed ticket limits",
+            block.timestamp + 1 days,
+            block.timestamp + 2 days,
+            "Mixed Arena",
+            ticketTypes,
+            ticketPrices,
+            mixedQuantities,
+            address(nftContract)
+        ));
+        Event mixedEventContract = Event(payable(eventAddress));
+        vm.stopPrank();
+        
+        vm.prank(owner);
+        nftContract.createEvent(
+            address(mixedEventContract),
+            "Mixed Limits Event",
+            "An event with mixed ticket limits",
+            block.timestamp + 1 days,
+            block.timestamp + 2 days,
+            "Mixed Arena"
+        );
+        
+        // Buy all VIP tickets
+        vm.startPrank(buyer);
+        for (uint256 i = 0; i < 5; i++) {
+            mixedEventContract.purchaseTicket{value: 0.1 ether}(0); // VIP ticket
+        }
+        vm.stopPrank();
+        
+        // Try to buy one more VIP ticket (should fail)
+        vm.startPrank(buyer2);
+        vm.expectRevert();
+        mixedEventContract.purchaseTicket{value: 0.1 ether}(0);
+        vm.stopPrank();
+        
+        // But should be able to buy unlimited general tickets
+        vm.startPrank(buyer2);
+        for (uint256 i = 0; i < 10; i++) {
+            mixedEventContract.purchaseTicket{value: 0.05 ether}(1); // General ticket
+        }
+        assertEq(mixedEventContract.soldTickets(), 15); // 5 VIP + 10 General
         vm.stopPrank();
     }
 } 

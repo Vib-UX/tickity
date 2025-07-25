@@ -17,12 +17,11 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     uint256 public startTime;
     uint256 public endTime;
     string public location;
-    uint256 public totalTickets;
-    uint256 public soldTickets;
+    uint256 public soldTickets; // Removed totalTickets - now dynamic
     
     string[] public ticketTypes;
     uint256[] public ticketPrices;
-    uint256[] public ticketQuantities;
+    uint256[] public ticketQuantities; // This can now be unlimited (0 means unlimited)
     uint256[] public soldByType;
     
     address public nftContract;
@@ -35,11 +34,79 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint256[]) public userPurchases;
     mapping(uint256 => bool) public usedTickets;
     
-    // Events
-    event TicketPurchased(address indexed buyer, uint256 indexed ticketType, uint256 price, uint256 tokenId);
-    event TicketUsed(uint256 indexed tokenId, address indexed user);
-    event EventCancelled();
-    event EventUpdated();
+    // Events with comprehensive details for subgraph
+    event EventCreated(
+        uint256 indexed eventId,
+        address indexed eventAddress,
+        address indexed organizer,
+        string name,
+        string description,
+        uint256 startTime,
+        uint256 endTime,
+        string location,
+        uint256 totalTickets,
+        uint256 createdAt
+    );
+    
+    event TicketPurchased(
+        address indexed buyer,
+        uint256 indexed eventId,
+        uint256 indexed ticketType,
+        uint256 tokenId,
+        uint256 price,
+        string ticketTypeName,
+        uint256 purchaseTime,
+        uint256 remainingTickets,
+        uint256 soldByTypeCount
+    );
+    
+    event TicketUsed(
+        uint256 indexed tokenId,
+        uint256 indexed eventId,
+        address indexed user,
+        uint256 useTime,
+        string eventName,
+        string ticketTypeName
+    );
+    
+    event EventCancelled(
+        uint256 indexed eventId,
+        address indexed organizer,
+        uint256 cancelledAt,
+        string reason
+    );
+    
+    event EventUpdated(
+        uint256 indexed eventId,
+        address indexed organizer,
+        string oldName,
+        string newName,
+        string oldDescription,
+        string newDescription,
+        string oldLocation,
+        string newLocation,
+        uint256 updatedAt
+    );
+    
+    event EventPaused(
+        uint256 indexed eventId,
+        address indexed organizer,
+        uint256 pausedAt,
+        string reason
+    );
+    
+    event EventUnpaused(
+        uint256 indexed eventId,
+        address indexed organizer,
+        uint256 unpausedAt
+    );
+    
+    event FundsWithdrawn(
+        uint256 indexed eventId,
+        address indexed organizer,
+        uint256 amount,
+        uint256 withdrawnAt
+    );
     
     // Modifiers
     modifier onlyOrganizer() {
@@ -63,7 +130,6 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         uint256 _startTime,
         uint256 _endTime,
         string memory _location,
-        uint256 _totalTickets,
         string[] memory _ticketTypes,
         uint256[] memory _ticketPrices,
         uint256[] memory _ticketQuantities,
@@ -75,7 +141,6 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         startTime = _startTime;
         endTime = _endTime;
         location = _location;
-        totalTickets = _totalTickets;
         ticketTypes = _ticketTypes;
         ticketPrices = _ticketPrices;
         ticketQuantities = _ticketQuantities;
@@ -84,6 +149,20 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         isActive = true;
         
         soldByType = new uint256[](_ticketTypes.length);
+        
+        // Emit comprehensive event creation event
+        emit EventCreated(
+            eventId, // Will be set later by factory
+            address(this),
+            _organizer,
+            _name,
+            _description,
+            _startTime,
+            _endTime,
+            _location,
+            0, // No total tickets limit for dynamic minting
+            block.timestamp
+        );
     }
     
     /**
@@ -93,8 +172,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     function purchaseTicket(uint256 ticketTypeIndex) external payable nonReentrant whenNotPaused eventActive {
         require(ticketTypeIndex < ticketTypes.length, "Invalid ticket type");
         require(msg.value == ticketPrices[ticketTypeIndex], "Incorrect payment amount");
-        require(soldByType[ticketTypeIndex] < ticketQuantities[ticketTypeIndex], "Ticket type sold out");
-        require(soldTickets < totalTickets, "Event sold out");
+        require(ticketQuantities[ticketTypeIndex] == 0 || soldByType[ticketTypeIndex] < ticketQuantities[ticketTypeIndex], "Ticket type sold out");
         require(block.timestamp < startTime, "Event has already started");
         
         // Update counters
@@ -116,7 +194,18 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         
         userPurchases[msg.sender].push(tokenId);
         
-        emit TicketPurchased(msg.sender, ticketTypeIndex, ticketPrices[ticketTypeIndex], tokenId);
+        // Emit comprehensive purchase event
+        emit TicketPurchased(
+            msg.sender,
+            eventId,
+            ticketTypeIndex,
+            tokenId,
+            ticketPrices[ticketTypeIndex],
+            ticketTypes[ticketTypeIndex],
+            block.timestamp,
+            0, // No remaining tickets limit for dynamic minting
+            soldByType[ticketTypeIndex]
+        );
     }
     
     /**
@@ -133,7 +222,19 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         usedTickets[tokenId] = true;
         nft.useTicket(tokenId);
         
-        emit TicketUsed(tokenId, msg.sender);
+        // Get ticket details for event
+        TickityNFT.Ticket memory ticket = nft.getTicket(tokenId);
+        string memory ticketTypeName = ticketTypes[ticket.ticketType];
+        
+        // Emit comprehensive ticket usage event
+        emit TicketUsed(
+            tokenId,
+            eventId,
+            msg.sender,
+            block.timestamp,
+            name,
+            ticketTypeName
+        );
     }
     
     /**
@@ -141,7 +242,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
      */
     function cancelEvent() external onlyOrganizer eventNotStarted {
         isActive = false;
-        emit EventCancelled();
+        emit EventCancelled(eventId, organizer, block.timestamp, "Event cancelled by organizer");
     }
     
     /**
@@ -155,10 +256,25 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         string memory newDescription,
         string memory newLocation
     ) external onlyOrganizer eventNotStarted {
+        string memory oldName = name;
+        string memory oldDescription = description;
+        string memory oldLocation = location;
+        
         name = newName;
         description = newDescription;
         location = newLocation;
-        emit EventUpdated();
+        
+        emit EventUpdated(
+            eventId,
+            organizer,
+            oldName,
+            newName,
+            oldDescription,
+            newDescription,
+            oldLocation,
+            newLocation,
+            block.timestamp
+        );
     }
     
     /**
@@ -179,6 +295,8 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         
         (bool success, ) = organizer.call{value: balance}("");
         require(success, "Transfer failed");
+        
+        emit FundsWithdrawn(eventId, organizer, balance, block.timestamp);
     }
     
     /**
@@ -186,6 +304,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
      */
     function pause() external onlyOrganizer {
         _pause();
+        emit EventPaused(eventId, organizer, block.timestamp, "Event paused by organizer");
     }
     
     /**
@@ -193,6 +312,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
      */
     function unpause() external onlyOrganizer {
         _unpause();
+        emit EventUnpaused(eventId, organizer, block.timestamp);
     }
     
     /**
@@ -241,7 +361,18 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     ) {
         bool eventStarted = block.timestamp >= startTime;
         bool eventEnded = block.timestamp > endTime;
-        uint256 remaining = totalTickets - soldTickets;
+        
+        // For dynamic minting, calculate remaining based on ticket type limits
+        uint256 remaining = 0;
+        for (uint256 i = 0; i < ticketQuantities.length; i++) {
+            if (ticketQuantities[i] == 0) {
+                // Unlimited tickets for this type
+                remaining = type(uint256).max;
+                break;
+            } else {
+                remaining += ticketQuantities[i] - soldByType[i];
+            }
+        }
         
         return (isActive, eventStarted, eventEnded, remaining);
     }

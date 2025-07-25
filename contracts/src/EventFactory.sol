@@ -16,8 +16,25 @@ contract EventFactory is Ownable, ReentrancyGuard {
     mapping(address => uint256[]) public organizerEvents;
     uint256 public eventCount;
     
-    // Events
-    event EventCreated(uint256 indexed eventId, address indexed eventAddress, address indexed organizer);
+    // Events with comprehensive details for subgraph
+    event EventCreated(
+        uint256 indexed eventId,
+        address indexed eventAddress,
+        address indexed organizer,
+        uint256 createdAt
+    );
+    
+    event EventFactoryInitialized(
+        address indexed factoryAddress,
+        address indexed owner,
+        uint256 initializedAt
+    );
+    
+    event OrganizerRegistered(
+        address indexed organizer,
+        uint256 indexed eventId,
+        uint256 registeredAt
+    );
     
     /**
      * @dev Create a new event
@@ -26,10 +43,9 @@ contract EventFactory is Ownable, ReentrancyGuard {
      * @param startTime The start time of the event
      * @param endTime The end time of the event
      * @param location The location of the event
-     * @param totalTickets The total number of tickets available
      * @param ticketTypes Array of ticket type names
      * @param ticketPrices Array of ticket prices
-     * @param ticketQuantities Array of ticket quantities per type
+     * @param ticketQuantities Array of ticket quantities per type (0 means unlimited)
      * @param nftContract The address of the NFT contract
      */
     function createEvent(
@@ -38,7 +54,6 @@ contract EventFactory is Ownable, ReentrancyGuard {
         uint256 startTime,
         uint256 endTime,
         string memory location,
-        uint256 totalTickets,
         string[] memory ticketTypes,
         uint256[] memory ticketPrices,
         uint256[] memory ticketQuantities,
@@ -50,11 +65,8 @@ contract EventFactory is Ownable, ReentrancyGuard {
         require(ticketTypes.length == ticketQuantities.length, "Arrays length mismatch");
         require(ticketTypes.length > 0, "Must have at least one ticket type");
         
-        uint256 totalQuantity = 0;
-        for (uint256 i = 0; i < ticketQuantities.length; i++) {
-            totalQuantity += ticketQuantities[i];
-        }
-        require(totalQuantity == totalTickets, "Total quantities must match total tickets");
+        // For dynamic minting, we don't need to validate total quantities
+        // Each ticket type can have its own limit (0 means unlimited)
         
         eventCount++;
         
@@ -64,7 +76,6 @@ contract EventFactory is Ownable, ReentrancyGuard {
             startTime,
             endTime,
             location,
-            totalTickets,
             ticketTypes,
             ticketPrices,
             ticketQuantities,
@@ -75,7 +86,19 @@ contract EventFactory is Ownable, ReentrancyGuard {
         events[eventCount] = address(newEvent);
         organizerEvents[msg.sender].push(eventCount);
         
-        emit EventCreated(eventCount, address(newEvent), msg.sender);
+        // Set event ID in the new event contract
+        newEvent.setEventId(eventCount);
+        
+        // Emit factory event creation event (Event contract will emit its own detailed event)
+        emit EventCreated(
+            eventCount,
+            address(newEvent),
+            msg.sender,
+            block.timestamp
+        );
+        
+        // Emit organizer registration event
+        emit OrganizerRegistered(msg.sender, eventCount, block.timestamp);
         
         return address(newEvent);
     }

@@ -43,11 +43,56 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     mapping(address => uint256[]) public userTickets;
     mapping(uint256 => mapping(uint256 => uint256)) public eventTicketTypePrices;
     
-    // Events
-    event TicketMinted(uint256 indexed tokenId, uint256 indexed eventId, address indexed owner);
-    event TicketUsed(uint256 indexed tokenId, uint256 indexed eventId);
-    event TicketRefunded(uint256 indexed tokenId, uint256 indexed eventId);
-    event EventCreated(uint256 indexed eventId, address indexed eventContract, string name);
+    // Events with comprehensive details for subgraph
+    event TicketMinted(
+        uint256 indexed tokenId,
+        uint256 indexed eventId,
+        address indexed owner,
+        uint256 ticketType,
+        uint256 price,
+        uint256 mintedAt
+    );
+    
+    event TicketUsed(
+        uint256 indexed tokenId,
+        uint256 indexed eventId,
+        address indexed user,
+        uint256 usedAt
+    );
+    
+    event TicketRefunded(
+        uint256 indexed tokenId,
+        uint256 indexed eventId,
+        address indexed owner,
+        uint256 refundedAt,
+        uint256 refundAmount
+    );
+    
+    event EventCreated(
+        uint256 indexed eventId,
+        address indexed eventContract,
+        address indexed creator,
+        string name,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 totalTickets,
+        uint256 createdAt
+    );
+    
+    event EventUpdated(
+        uint256 indexed eventId,
+        address indexed eventContract,
+        string oldName,
+        string newName,
+        uint256 updatedAt
+    );
+    
+    event EventDeactivated(
+        uint256 indexed eventId,
+        address indexed eventContract,
+        uint256 deactivatedAt,
+        string reason
+    );
     
     // Modifiers
     modifier onlyEventContract(uint256 eventId) {
@@ -91,7 +136,7 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         string memory tokenURI
     ) external onlyEventContract(eventId) returns (uint256) {
         require(events[eventId].isActive, "Event is not active");
-        require(events[eventId].soldTickets < events[eventId].totalTickets, "Event sold out");
+        // Removed totalTickets check for dynamic minting
         
         uint256 newTokenId = _tokenIds;
         _tokenIds++;
@@ -112,7 +157,7 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         userTickets[recipient].push(newTokenId);
         events[eventId].soldTickets++;
         
-        emit TicketMinted(newTokenId, eventId, recipient);
+        emit TicketMinted(newTokenId, eventId, recipient, ticketType, price, block.timestamp);
         return newTokenId;
     }
     
@@ -124,7 +169,7 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         require(ownerOf(tokenId) == msg.sender || events[tickets[tokenId].eventId].eventContract == msg.sender, "Not authorized");
         
         tickets[tokenId].isUsed = true;
-        emit TicketUsed(tokenId, tickets[tokenId].eventId);
+        emit TicketUsed(tokenId, tickets[tokenId].eventId, msg.sender, block.timestamp);
     }
     
     /**
@@ -138,7 +183,7 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         tickets[tokenId].isRefunded = true;
         events[tickets[tokenId].eventId].soldTickets--;
         
-        emit TicketRefunded(tokenId, tickets[tokenId].eventId);
+        emit TicketRefunded(tokenId, tickets[tokenId].eventId, msg.sender, block.timestamp, tickets[tokenId].price);
     }
     
     /**
@@ -149,7 +194,6 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
      * @param startTime The start time of the event
      * @param endTime The end time of the event
      * @param location The location of the event
-     * @param totalTickets The total number of tickets available
      */
     function createEvent(
         address eventContract,
@@ -157,8 +201,7 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         string memory description,
         uint256 startTime,
         uint256 endTime,
-        string memory location,
-        uint256 totalTickets
+        string memory location
     ) external onlyOwner {
         uint256 eventId = _eventIds;
         _eventIds++;
@@ -171,11 +214,22 @@ contract TickityNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
             endTime: endTime,
             location: location,
             isActive: true,
-            totalTickets: totalTickets,
+            totalTickets: 0, // No limit for dynamic minting
             soldTickets: 0
         });
         
-        emit EventCreated(eventId, eventContract, name);
+        emit EventCreated(eventId, eventContract, msg.sender, name, startTime, endTime, 0, block.timestamp);
+    }
+    
+    /**
+     * @dev Deactivate an event
+     * @param eventId The event ID
+     * @param reason The reason for deactivation
+     */
+    function deactivateEvent(uint256 eventId, string memory reason) external onlyEventContract(eventId) {
+        require(events[eventId].isActive, "Event is already deactivated");
+        events[eventId].isActive = false;
+        emit EventDeactivated(eventId, events[eventId].eventContract, block.timestamp, reason);
     }
     
     /**
