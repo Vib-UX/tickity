@@ -1,0 +1,24 @@
+diff --git a/build/OrbitControls.js b/build/OrbitControls.js
+index 5540eb23eaa4c53a5d685ef34f83f864b12f64aa..a7776502f2bd83b08f8e460013ecded16824a85d 100644
+--- a/build/OrbitControls.js
++++ b/build/OrbitControls.js
+@@ -9,9 +9,9 @@
+  * @author erich666 / http://erichaines.com
+  * @author ScieCode / http://github.com/sciecode
+  */
+-import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3, } from 'three';
+ import { Platform } from 'react-native';
+ import { getNode } from 'react-native-web-hooks';
++import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3, } from 'three';
+ // This set of controls performs orbiting, dollying (zooming), and panning.
+ // Unlike TrackballControls, it maintains the "up" direction object.up (+Y by default).
+ //
+@@ -631,7 +631,7 @@ export class OrbitControls extends EventDispatcher {
+             const offset = new Vector3();
+             // so camera.up is the orbit axis
+             const quat = new Quaternion().setFromUnitVectors(this.object.up, new Vector3(0, 1, 0));
+-            const quatInverse = quat.clone().inverse();
++            const quatInverse = quat.clone().invert();
+             const lastPosition = new Vector3();
+             const lastQuaternion = new Quaternion();
+             return () => {
