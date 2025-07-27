@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./TickityNFT.sol";
+import "./IUSDT.sol";
 
 /**
  * @title Event
@@ -26,6 +27,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     
     address public nftContract;
     address public organizer;
+    address public usdtContract;
     
     bool public isActive;
     uint256 public eventId;
@@ -134,7 +136,8 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         uint256[] memory _ticketPrices,
         uint256[] memory _ticketQuantities,
         address _nftContract,
-        address _organizer
+        address _organizer,
+        address _usdtContract
     ) Ownable(_organizer) {
         name = _name;
         description = _description;
@@ -146,6 +149,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         ticketQuantities = _ticketQuantities;
         nftContract = _nftContract;
         organizer = _organizer;
+        usdtContract = _usdtContract;
         isActive = true;
         
         soldByType = new uint256[](_ticketTypes.length);
@@ -166,14 +170,19 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     }
     
     /**
-     * @dev Purchase a ticket
+     * @dev Purchase a ticket with USDT
      * @param ticketTypeIndex The index of the ticket type to purchase
      */
-    function purchaseTicket(uint256 ticketTypeIndex) external payable nonReentrant whenNotPaused eventActive {
+    function purchaseTicket(uint256 ticketTypeIndex) external nonReentrant whenNotPaused eventActive {
         require(ticketTypeIndex < ticketTypes.length, "Invalid ticket type");
-        require(msg.value == ticketPrices[ticketTypeIndex], "Incorrect payment amount");
         require(ticketQuantities[ticketTypeIndex] == 0 || soldByType[ticketTypeIndex] < ticketQuantities[ticketTypeIndex], "Ticket type sold out");
         require(block.timestamp < startTime, "Event has already started");
+        
+        uint256 ticketPrice = ticketPrices[ticketTypeIndex];
+        
+        // Transfer USDT from buyer to this contract
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transferFrom(msg.sender, address(this), ticketPrice), "USDT transfer failed");
         
         // Update counters
         soldByType[ticketTypeIndex]++;
@@ -187,7 +196,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         uint256 tokenId = nft.mintTicket(
             eventId,
             ticketTypeIndex,
-            ticketPrices[ticketTypeIndex],
+            ticketPrice,
             msg.sender,
             tokenURI
         );
@@ -200,7 +209,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
             eventId,
             ticketTypeIndex,
             tokenId,
-            ticketPrices[ticketTypeIndex],
+            ticketPrice,
             ticketTypes[ticketTypeIndex],
             block.timestamp,
             0, // No remaining tickets limit for dynamic minting
@@ -287,14 +296,14 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     }
     
     /**
-     * @dev Withdraw funds (organizer only)
+     * @dev Withdraw USDT funds (organizer only)
      */
     function withdrawFunds() external onlyOrganizer {
-        uint256 balance = address(this).balance;
+        IUSDT usdt = IUSDT(usdtContract);
+        uint256 balance = usdt.balanceOf(address(this));
         require(balance > 0, "No funds to withdraw");
         
-        (bool success, ) = organizer.call{value: balance}("");
-        require(success, "Transfer failed");
+        require(usdt.transfer(organizer, balance), "USDT transfer failed");
         
         emit FundsWithdrawn(eventId, organizer, balance, block.timestamp);
     }
@@ -392,7 +401,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
                 '"attributes":[',
                 '{"trait_type":"Event","value":"', name, '"},',
                 '{"trait_type":"Ticket Type","value":"', ticketTypes[ticketTypeIndex], '"},',
-                '{"trait_type":"Price","value":"', _uint2str(ticketPrices[ticketTypeIndex]), ' ETH"}',
+                '{"trait_type":"Price","value":"', _uint2str(ticketPrices[ticketTypeIndex]), ' USDT"}',
                 ']}'
             )))
         ));
@@ -435,6 +444,6 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     
     // Fallback function to receive ETH
     receive() external payable {
-        revert("Use purchaseTicket function");
+        revert("Use purchaseTicket function with USDT");
     }
 } 

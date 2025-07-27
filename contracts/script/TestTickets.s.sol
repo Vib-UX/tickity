@@ -168,7 +168,7 @@ contract TestTickets is Script {
 
         // Purchase tickets (ticket type index 0)
         for (uint256 i = 0; i < ticketsToBuy; i++) {
-            eventContract.purchaseTicket{value: ticketPrice}(0);
+            eventContract.purchaseTicket(0);
             console.log("  Ticket", i + 1, "purchased successfully");
         }
 

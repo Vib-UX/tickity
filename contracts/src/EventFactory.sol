@@ -10,17 +10,36 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @dev Factory contract for creating and managing individual event contracts
  */
 contract EventFactory is Ownable, ReentrancyGuard {
-    constructor() Ownable(msg.sender) {}
+    constructor(address _usdtContract) Ownable(msg.sender) {
+        usdtContract = _usdtContract;
+    }
     // State variables
     mapping(uint256 => address) public events;
     mapping(address => uint256[]) public organizerEvents;
     uint256 public eventCount;
+    address public usdtContract;
     
     // Events with comprehensive details for subgraph
     event EventCreated(
         uint256 indexed eventId,
         address indexed eventAddress,
         address indexed organizer,
+        uint256 createdAt
+    );
+    
+    event EventCreatedDetailed(
+        uint256 indexed eventId,
+        address indexed eventAddress,
+        address indexed organizer,
+        string name,
+        string description,
+        uint256 startTime,
+        uint256 endTime,
+        string location,
+        string[] ticketTypes,
+        uint256[] ticketPrices,
+        uint256[] ticketQuantities,
+        address nftContract,
         uint256 createdAt
     );
     
@@ -34,6 +53,20 @@ contract EventFactory is Ownable, ReentrancyGuard {
         address indexed organizer,
         uint256 indexed eventId,
         uint256 registeredAt
+    );
+    
+    event EventFactoryStats(
+        uint256 indexed eventId,
+        uint256 totalEvents,
+        uint256 organizerEventCount,
+        uint256 timestamp
+    );
+    
+    event EventFactoryUpdated(
+        address indexed factoryAddress,
+        address indexed owner,
+        uint256 updatedAt,
+        string reason
     );
     
     /**
@@ -80,7 +113,8 @@ contract EventFactory is Ownable, ReentrancyGuard {
             ticketPrices,
             ticketQuantities,
             nftContract,
-            msg.sender
+            msg.sender,
+            usdtContract
         );
         
         events[eventCount] = address(newEvent);
@@ -88,6 +122,17 @@ contract EventFactory is Ownable, ReentrancyGuard {
         
         // Set event ID in the new event contract
         newEvent.setEventId(eventCount);
+        
+        // Register the event in the NFT contract
+        TickityNFT nftContractInstance = TickityNFT(nftContract);
+        nftContractInstance.createEvent(
+            address(newEvent),
+            name,
+            description,
+            startTime,
+            endTime,
+            location
+        );
         
         // Emit factory event creation event (Event contract will emit its own detailed event)
         emit EventCreated(
@@ -97,8 +142,33 @@ contract EventFactory is Ownable, ReentrancyGuard {
             block.timestamp
         );
         
+        // Emit comprehensive detailed event for subgraph
+        emit EventCreatedDetailed(
+            eventCount,
+            address(newEvent),
+            msg.sender,
+            name,
+            description,
+            startTime,
+            endTime,
+            location,
+            ticketTypes,
+            ticketPrices,
+            ticketQuantities,
+            nftContract,
+            block.timestamp
+        );
+        
         // Emit organizer registration event
         emit OrganizerRegistered(msg.sender, eventCount, block.timestamp);
+        
+        // Emit factory statistics event
+        emit EventFactoryStats(
+            eventCount,
+            eventCount,
+            organizerEvents[msg.sender].length,
+            block.timestamp
+        );
         
         return address(newEvent);
     }

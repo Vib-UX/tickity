@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "./TickityNFT.sol";
+import "./IUSDT.sol";
 
 /**
  * @title TickityMarketplace
@@ -36,11 +37,12 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
     mapping(uint256 => address[]) public offerAddresses;
     
     uint256 public platformFee = 250; // 2.5% (250 basis points)
-    uint256 public listingFee = 0.001 ether;
+    uint256 public listingFee = 1000000; // 1 USDT (6 decimals)
     uint256 public listingDuration = 7 days;
     uint256 public offerDuration = 3 days;
     
     address public nftContract;
+    address public usdtContract;
     
     // Events
     event TicketListed(uint256 indexed tokenId, address indexed seller, uint256 price, uint256 expiresAt);
@@ -76,19 +78,23 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
         _;
     }
     
-    constructor(address _nftContract) Ownable(msg.sender) {
+    constructor(address _nftContract, address _usdtContract) Ownable(msg.sender) {
         nftContract = _nftContract;
+        usdtContract = _usdtContract;
     }
     
     /**
      * @dev List a ticket for sale
      * @param tokenId The ticket token ID
-     * @param price The sale price
+     * @param price The sale price in USDT
      */
-    function listTicket(uint256 tokenId, uint256 price) external payable nonReentrant onlyTicketOwner(tokenId) {
-        require(msg.value == listingFee, "Incorrect listing fee");
+    function listTicket(uint256 tokenId, uint256 price) external nonReentrant onlyTicketOwner(tokenId) {
         require(price > 0, "Price must be greater than 0");
         require(!listings[tokenId].isActive, "Ticket already listed");
+        
+        // Transfer listing fee in USDT
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transferFrom(msg.sender, address(this), listingFee), "USDT listing fee transfer failed");
         
         // Check if ticket is valid for resale
         TickityNFT nft = TickityNFT(nftContract);
@@ -110,13 +116,16 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
     }
     
     /**
-     * @dev Purchase a listed ticket
+     * @dev Purchase a listed ticket with USDT
      * @param tokenId The ticket token ID
      */
-    function purchaseTicket(uint256 tokenId) external payable nonReentrant listingExists(tokenId) listingNotExpired(tokenId) {
+    function purchaseTicket(uint256 tokenId) external nonReentrant listingExists(tokenId) listingNotExpired(tokenId) {
         Listing storage listing = listings[tokenId];
-        require(msg.value == listing.price, "Incorrect payment amount");
         require(msg.sender != listing.seller, "Cannot buy your own ticket");
+        
+        // Transfer USDT from buyer to this contract
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transferFrom(msg.sender, address(this), listing.price), "USDT transfer failed");
         
         // Calculate fees
         uint256 platformFeeAmount = (listing.price * platformFee) / 10000;
@@ -125,12 +134,9 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
         // Transfer ticket to buyer
         IERC721(nftContract).safeTransferFrom(address(this), msg.sender, tokenId);
         
-        // Transfer funds
-        (bool feeSuccess, ) = owner().call{value: platformFeeAmount}("");
-        require(feeSuccess, "Fee transfer failed");
-        
-        (bool sellerSuccess, ) = listing.seller.call{value: sellerAmount}("");
-        require(sellerSuccess, "Seller transfer failed");
+        // Transfer USDT funds
+        require(usdt.transfer(owner(), platformFeeAmount), "Platform fee transfer failed");
+        require(usdt.transfer(listing.seller, sellerAmount), "Seller transfer failed");
         
         // Clear listing
         delete listings[tokenId];
@@ -153,17 +159,22 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
     }
     
     /**
-     * @dev Make an offer on a ticket
+     * @dev Make an offer on a ticket with USDT
      * @param tokenId The ticket token ID
+     * @param amount The offer amount in USDT
      */
-    function makeOffer(uint256 tokenId) external payable nonReentrant {
-        require(msg.value > 0, "Offer amount must be greater than 0");
+    function makeOffer(uint256 tokenId, uint256 amount) external nonReentrant {
+        require(amount > 0, "Offer amount must be greater than 0");
         require(IERC721(nftContract).ownerOf(tokenId) != msg.sender, "Cannot offer on your own ticket");
         require(!offers[tokenId][msg.sender].isActive, "Offer already exists");
         
+        // Transfer USDT from bidder to this contract
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transferFrom(msg.sender, address(this), amount), "USDT transfer failed");
+        
         offers[tokenId][msg.sender] = Offer({
             bidder: msg.sender,
-            amount: msg.value,
+            amount: amount,
             isActive: true,
             offeredAt: block.timestamp,
             expiresAt: block.timestamp + offerDuration
@@ -171,7 +182,7 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
         
         offerAddresses[tokenId].push(msg.sender);
         
-        emit OfferMade(tokenId, msg.sender, msg.value);
+        emit OfferMade(tokenId, msg.sender, amount);
     }
     
     /**
@@ -189,12 +200,10 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
         // Transfer ticket to bidder
         IERC721(nftContract).safeTransferFrom(msg.sender, bidder, tokenId);
         
-        // Transfer funds
-        (bool feeSuccess, ) = owner().call{value: platformFeeAmount}("");
-        require(feeSuccess, "Fee transfer failed");
-        
-        (bool sellerSuccess, ) = msg.sender.call{value: sellerAmount}("");
-        require(sellerSuccess, "Seller transfer failed");
+        // Transfer USDT funds
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transfer(owner(), platformFeeAmount), "Platform fee transfer failed");
+        require(usdt.transfer(msg.sender, sellerAmount), "Seller transfer failed");
         
         // Clear offer
         delete offers[tokenId][bidder];
@@ -210,9 +219,9 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
     function cancelOffer(uint256 tokenId) external nonReentrant offerExists(tokenId, msg.sender) {
         Offer storage offer = offers[tokenId][msg.sender];
         
-        // Return funds to bidder
-        (bool success, ) = msg.sender.call{value: offer.amount}("");
-        require(success, "Refund failed");
+        // Return USDT funds to bidder
+        IUSDT usdt = IUSDT(usdtContract);
+        require(usdt.transfer(msg.sender, offer.amount), "USDT refund failed");
         
         delete offers[tokenId][msg.sender];
         _removeOfferAddress(tokenId, msg.sender);
@@ -287,14 +296,14 @@ contract TickityMarketplace is Ownable, ReentrancyGuard, ERC721Holder {
     }
     
     /**
-     * @dev Withdraw accumulated fees (owner only)
+     * @dev Withdraw accumulated USDT fees (owner only)
      */
     function withdrawFees() external onlyOwner {
-        uint256 balance = address(this).balance;
+        IUSDT usdt = IUSDT(usdtContract);
+        uint256 balance = usdt.balanceOf(address(this));
         require(balance > 0, "No fees to withdraw");
         
-        (bool success, ) = owner().call{value: balance}("");
-        require(success, "Withdrawal failed");
+        require(usdt.transfer(owner(), balance), "USDT withdrawal failed");
     }
     
     // Fallback function

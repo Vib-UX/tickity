@@ -6,6 +6,7 @@ import "../src/TickityNFT.sol";
 import "../src/EventFactory.sol";
 import "../src/Event.sol";
 import "../src/TickityMarketplace.sol";
+import "./MockUSDT.sol";
 
 /**
  * @title TickityTest
@@ -16,6 +17,7 @@ contract TickityTest is Test {
     EventFactory public factoryContract;
     TickityMarketplace public marketplaceContract;
     Event public eventContract;
+    MockUSDT public usdtContract;
     
     address public owner = address(1);
     address public organizer = address(2);
@@ -33,17 +35,21 @@ contract TickityTest is Test {
         vm.label(buyer, "Buyer");
         vm.label(buyer2, "Buyer2");
         
-        // Fund test accounts
-        vm.deal(owner, 100 ether);
-        vm.deal(organizer, 100 ether);
-        vm.deal(buyer, 100 ether);
-        vm.deal(buyer2, 100 ether);
-        
-        // Deploy contracts
+        // Deploy contracts first
         vm.startPrank(owner);
+        usdtContract = new MockUSDT();
         nftContract = new TickityNFT();
-        factoryContract = new EventFactory();
-        marketplaceContract = new TickityMarketplace(address(nftContract));
+        factoryContract = new EventFactory(address(usdtContract));
+        marketplaceContract = new TickityMarketplace(address(nftContract), address(usdtContract));
+        // Transfer NFT ownership to factory for tests
+        nftContract.transferOwnership(address(factoryContract));
+        vm.stopPrank();
+        
+        // Fund test accounts with USDT after deployment
+        vm.startPrank(owner);
+        usdtContract.transfer(organizer, 1000000000); // 1000 USDT
+        usdtContract.transfer(buyer, 1000000000);     // 1000 USDT
+        usdtContract.transfer(buyer2, 1000000000);    // 1000 USDT
         vm.stopPrank();
         
         // Setup ticket types
@@ -52,8 +58,8 @@ contract TickityTest is Test {
         ticketTypes[1] = "General";
         
         ticketPrices = new uint256[](2);
-        ticketPrices[0] = 0.1 ether;
-        ticketPrices[1] = 0.05 ether;
+        ticketPrices[0] = 100000; // 0.1 USDT (6 decimals)
+        ticketPrices[1] = 50000;  // 0.05 USDT (6 decimals)
         
         ticketQuantities = new uint256[](2);
         ticketQuantities[0] = 10;
@@ -61,7 +67,7 @@ contract TickityTest is Test {
     }
     
     function test_DeployContracts() public {
-        assertEq(nftContract.owner(), owner);
+        assertEq(nftContract.owner(), address(factoryContract));
         assertEq(factoryContract.owner(), owner);
         assertEq(marketplaceContract.owner(), owner);
         assertEq(marketplaceContract.nftContract(), address(nftContract));
@@ -106,24 +112,17 @@ contract TickityTest is Test {
         Event newEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        // Set event ID in NFT contract
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(newEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         // Purchase ticket
         vm.startPrank(buyer);
-        uint256 initialBalance = buyer.balance;
+        uint256 initialBalance = usdtContract.balanceOf(buyer);
         
-        newEventContract.purchaseTicket{value: 0.05 ether}(1); // General ticket
+        // Approve USDT spending
+        usdtContract.approve(address(newEventContract), 50000);
+        newEventContract.purchaseTicket(1); // General ticket
         
-        assertEq(buyer.balance, initialBalance - 0.05 ether);
+        assertEq(usdtContract.balanceOf(buyer), initialBalance - 50000);
         assertEq(newEventContract.soldTickets(), 1);
         
         vm.stopPrank();
@@ -146,18 +145,11 @@ contract TickityTest is Test {
         Event testEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(testEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        testEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(testEventContract), 50000);
+        testEventContract.purchaseTicket(1);
         
         // Try to use ticket before event starts (should fail)
         vm.expectRevert();
@@ -190,26 +182,20 @@ contract TickityTest is Test {
         Event marketplaceEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(marketplaceEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        marketplaceEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(marketplaceEventContract), 50000);
+        marketplaceEventContract.purchaseTicket(1);
         
         // List ticket on marketplace
         nftContract.approve(address(marketplaceContract), 1);
-        marketplaceContract.listTicket{value: 0.001 ether}(1, 0.08 ether);
+        usdtContract.approve(address(marketplaceContract), 1000000); // 1 USDT listing fee
+        marketplaceContract.listTicket(1, 80000); // 0.08 USDT
         
         (address seller, uint256 tokenId, uint256 price, bool isActive, uint256 listedAt, uint256 expiresAt) = marketplaceContract.listings(1);
         assertTrue(isActive);
-        assertEq(price, 0.08 ether);
+        assertEq(price, 80000);
         
         vm.stopPrank();
     }
@@ -231,29 +217,24 @@ contract TickityTest is Test {
         Event purchaseEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(purchaseEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        purchaseEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(purchaseEventContract), 50000);
+        purchaseEventContract.purchaseTicket(1);
         nftContract.approve(address(marketplaceContract), 1);
-        marketplaceContract.listTicket{value: 0.001 ether}(1, 0.08 ether);
+        usdtContract.approve(address(marketplaceContract), 1000000); // 1 USDT listing fee
+        marketplaceContract.listTicket(1, 80000); // 0.08 USDT
         vm.stopPrank();
         
         // Purchase from marketplace
         vm.startPrank(buyer2);
-        uint256 initialBalance = buyer2.balance;
+        uint256 initialBalance = usdtContract.balanceOf(buyer2);
         
-        marketplaceContract.purchaseTicket{value: 0.08 ether}(1);
+        usdtContract.approve(address(marketplaceContract), 80000);
+        marketplaceContract.purchaseTicket(1);
         
-        assertEq(buyer2.balance, initialBalance - 0.08 ether);
+        assertEq(usdtContract.balanceOf(buyer2), initialBalance - 80000);
         assertEq(nftContract.ownerOf(1), buyer2);
         
         vm.stopPrank();
@@ -276,27 +257,21 @@ contract TickityTest is Test {
         Event offerEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(offerEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+                // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        offerEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(offerEventContract), 50000);
+        offerEventContract.purchaseTicket(1);
         vm.stopPrank();
         
         // Make offer
         vm.startPrank(buyer2);
-        uint256 initialBalance = buyer2.balance;
+        uint256 initialBalance = usdtContract.balanceOf(buyer2);
         
-        marketplaceContract.makeOffer{value: 0.06 ether}(1);
+        usdtContract.approve(address(marketplaceContract), 60000);
+        marketplaceContract.makeOffer(1, 60000);
         
-        assertEq(buyer2.balance, initialBalance - 0.06 ether);
+        assertEq(usdtContract.balanceOf(buyer2), initialBalance - 60000);
         assertTrue(marketplaceContract.getOffer(1, buyer2).isActive);
         
         vm.stopPrank();
@@ -319,18 +294,11 @@ contract TickityTest is Test {
         Event refundEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(refundEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        refundEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(refundEventContract), 50000);
+        refundEventContract.purchaseTicket(1);
         
         // Refund ticket
         nftContract.refundTicket(1);
@@ -343,8 +311,9 @@ contract TickityTest is Test {
     
     function test_RevertWhen_PurchaseAfterSoldOut() public {
         // Create event with only 1 ticket for VIP type
-        ticketQuantities[0] = 1;
-        ticketQuantities[1] = 0; // Unlimited general tickets
+        uint256[] memory limitedQuantities = new uint256[](2);
+        limitedQuantities[0] = 1;
+        limitedQuantities[1] = 0; // Unlimited general tickets
         
         vm.startPrank(organizer);
         address payable eventAddress = payable(factoryContract.createEvent(
@@ -355,36 +324,31 @@ contract TickityTest is Test {
             "Test Location",
             ticketTypes,
             ticketPrices,
-            ticketQuantities,
+            limitedQuantities,
             address(nftContract)
         ));
         Event soldOutEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(soldOutEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         // Purchase first VIP ticket
         vm.startPrank(buyer);
-        soldOutEventContract.purchaseTicket{value: 0.1 ether}(0);
+        usdtContract.approve(address(soldOutEventContract), 100000);
+        soldOutEventContract.purchaseTicket(0);
         vm.stopPrank();
         
         // Try to purchase second VIP ticket (should fail)
         vm.startPrank(buyer2);
+        usdtContract.approve(address(soldOutEventContract), 100000);
         vm.expectRevert();
-        soldOutEventContract.purchaseTicket{value: 0.1 ether}(0);
+        soldOutEventContract.purchaseTicket(0);
         vm.stopPrank();
         
         // But should be able to purchase unlimited general tickets
         vm.startPrank(buyer2);
-        soldOutEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(soldOutEventContract), 50000);
+        soldOutEventContract.purchaseTicket(1);
         vm.stopPrank();
     }
     
@@ -405,18 +369,11 @@ contract TickityTest is Test {
         Event doubleUseEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(doubleUseEventContract),
-            "Test Event",
-            "A test event",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Test Location"
-        );
+        // Event is already registered in NFT contract by the factory
         
         vm.startPrank(buyer);
-        doubleUseEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(doubleUseEventContract), 50000);
+        doubleUseEventContract.purchaseTicket(1);
         
         // Fast forward to event time
         vm.warp(block.timestamp + 1 days + 1 hours);
@@ -452,22 +409,15 @@ contract TickityTest is Test {
         Event dynamicEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(dynamicEventContract),
-            "Dynamic Event",
-            "An event with unlimited ticket minting",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Dynamic Arena"
-        );
+        // Event is already registered in NFT contract by the factory
         
         // Purchase many tickets to test unlimited minting
         vm.startPrank(buyer);
         uint256 ticketsToBuy = 10;
         
         for (uint256 i = 0; i < ticketsToBuy; i++) {
-            dynamicEventContract.purchaseTicket{value: 0.05 ether}(1); // General ticket
+            usdtContract.approve(address(dynamicEventContract), 50000);
+            dynamicEventContract.purchaseTicket(1); // General ticket
         }
         
         assertEq(dynamicEventContract.soldTickets(), ticketsToBuy);
@@ -477,7 +427,8 @@ contract TickityTest is Test {
         
         // Test that we can still buy more tickets (unlimited)
         vm.startPrank(buyer2);
-        dynamicEventContract.purchaseTicket{value: 0.05 ether}(1);
+        usdtContract.approve(address(dynamicEventContract), 50000);
+        dynamicEventContract.purchaseTicket(1);
         assertEq(dynamicEventContract.soldTickets(), ticketsToBuy + 1);
         vm.stopPrank();
     }
@@ -503,33 +454,28 @@ contract TickityTest is Test {
         Event mixedEventContract = Event(payable(eventAddress));
         vm.stopPrank();
         
-        vm.prank(owner);
-        nftContract.createEvent(
-            address(mixedEventContract),
-            "Mixed Limits Event",
-            "An event with mixed ticket limits",
-            block.timestamp + 1 days,
-            block.timestamp + 2 days,
-            "Mixed Arena"
-        );
+        // Event is already registered in NFT contract by the factory
         
         // Buy all VIP tickets
         vm.startPrank(buyer);
         for (uint256 i = 0; i < 5; i++) {
-            mixedEventContract.purchaseTicket{value: 0.1 ether}(0); // VIP ticket
+            usdtContract.approve(address(mixedEventContract), 100000);
+            mixedEventContract.purchaseTicket(0); // VIP ticket
         }
         vm.stopPrank();
         
         // Try to buy one more VIP ticket (should fail)
         vm.startPrank(buyer2);
+        usdtContract.approve(address(mixedEventContract), 100000);
         vm.expectRevert();
-        mixedEventContract.purchaseTicket{value: 0.1 ether}(0);
+        mixedEventContract.purchaseTicket(0);
         vm.stopPrank();
         
         // But should be able to buy unlimited general tickets
         vm.startPrank(buyer2);
         for (uint256 i = 0; i < 10; i++) {
-            mixedEventContract.purchaseTicket{value: 0.05 ether}(1); // General ticket
+            usdtContract.approve(address(mixedEventContract), 50000);
+            mixedEventContract.purchaseTicket(1); // General ticket
         }
         assertEq(mixedEventContract.soldTickets(), 15); // 5 VIP + 10 General
         vm.stopPrank();

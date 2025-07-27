@@ -6,6 +6,7 @@ import "../src/TickityNFT.sol";
 import "../src/EventFactory.sol";
 import "../src/TickityMarketplace.sol";
 import "../src/Event.sol";
+import "../src/IUSDT.sol";
 
 /**
  * @title TestMarketplace
@@ -70,7 +71,7 @@ contract TestMarketplace is Script {
         ticketTypes[0] = "Marketplace Pass";
         
         uint256[] memory ticketPrices = new uint256[](1);
-        ticketPrices[0] = 0.001 ether;
+        ticketPrices[0] = 1000; // 0.001 USDT (6 decimals)
         
         uint256[] memory ticketQuantities = new uint256[](1);
         ticketQuantities[0] = 50;
@@ -120,8 +121,10 @@ contract TestMarketplace is Script {
         uint256 ticketPrice = eventContract.ticketPrices(0);
         
         // Purchase 2 tickets
+        IUSDT usdt = IUSDT(0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B);
         for (uint256 i = 0; i < 2; i++) {
-            eventContract.purchaseTicket{value: ticketPrice}(0);
+            usdt.approve(address(eventContract), ticketPrice);
+            eventContract.purchaseTicket(0);
             console.log("  User 1 purchased ticket", i + 1);
         }
         
@@ -140,7 +143,9 @@ contract TestMarketplace is Script {
         uint256 ticketPrice = eventContract.ticketPrices(0);
         
         // Purchase 1 ticket
-        eventContract.purchaseTicket{value: ticketPrice}(0);
+        IUSDT usdt = IUSDT(0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B);
+        usdt.approve(address(eventContract), ticketPrice);
+        eventContract.purchaseTicket(0);
         console.log("  User 2 purchased 1 ticket");
         
         uint256 user2Balance = nftContract.balanceOf(user2);
@@ -158,10 +163,12 @@ contract TestMarketplace is Script {
         console.log("User 1 listing ticket for sale...");
         
         uint256 tokenToSell = 4; // User 1's first ticket
-        uint256 listingPrice = 0.002 ether;
+        uint256 listingPrice = 2000; // 0.002 USDT
         
+        IUSDT usdt = IUSDT(0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B);
         nftContract.approve(address(marketplace), tokenToSell);
-        marketplace.listTicket{value: 0.001 ether}(tokenToSell, listingPrice);
+        usdt.approve(address(marketplace), 1000000); // 1 USDT listing fee
+        marketplace.listTicket(tokenToSell, listingPrice);
         console.log("  Listed token", tokenToSell, "for", listingPrice);
         vm.stopBroadcast();
 
@@ -169,7 +176,8 @@ contract TestMarketplace is Script {
         vm.startBroadcast(user2PrivateKey);
         console.log("User 2 buying listed ticket...");
         
-        marketplace.purchaseTicket{value: listingPrice}(tokenToSell);
+        usdt.approve(address(marketplace), listingPrice);
+        marketplace.purchaseTicket(tokenToSell);
         console.log("  User 2 bought token", tokenToSell, "for", listingPrice);
         vm.stopBroadcast();
 
@@ -178,10 +186,11 @@ contract TestMarketplace is Script {
         console.log("User 2 listing ticket for higher price...");
         
         uint256 tokenToSell2 = 6; // User 2's ticket
-        uint256 listingPrice2 = 0.003 ether;
+        uint256 listingPrice2 = 3000; // 0.003 USDT
         
         nftContract.approve(address(marketplace), tokenToSell2);
-        marketplace.listTicket{value: 0.001 ether}(tokenToSell2, listingPrice2);
+        usdt.approve(address(marketplace), 1000000); // 1 USDT listing fee
+        marketplace.listTicket(tokenToSell2, listingPrice2);
         console.log("  Listed token", tokenToSell2, "for", listingPrice2);
         vm.stopBroadcast();
 
@@ -189,7 +198,8 @@ contract TestMarketplace is Script {
         vm.startBroadcast(user1PrivateKey);
         console.log("User 1 buying higher-priced ticket...");
         
-        marketplace.purchaseTicket{value: listingPrice2}(tokenToSell2);
+        usdt.approve(address(marketplace), listingPrice2);
+        marketplace.purchaseTicket(tokenToSell2);
         console.log("  User 1 bought token", tokenToSell2, "for", listingPrice2);
         vm.stopBroadcast();
 

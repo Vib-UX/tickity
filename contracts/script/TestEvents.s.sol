@@ -22,39 +22,31 @@ contract TestEvents is Script {
 
         console.log("Starting Tickity Event Testing on Etherlink Testnet");
         console.log("==================================================");
-
-        // Initialize contract instances
-        EventFactory factory = EventFactory(EVENT_FACTORY);
-        TickityMarketplace marketplace = TickityMarketplace(payable(MARKETPLACE));
-        TickityNFT nftContract = TickityNFT(TICKITY_NFT);
-
         console.log("Contract Addresses:");
-        console.log("  EventFactory:", EVENT_FACTORY);
-        console.log("  Marketplace:", MARKETPLACE);
-        console.log("  TickityNFT:", TICKITY_NFT);
+        console.log("  EventFactory: 0xE5F8C19c223F1C4256E37B340b9aeec3695c6Ee5");
+        console.log("  Marketplace: 0xB898d02f8e79B68a8Fe669f855A8097a4eD462a3");
+        console.log("  TickityNFT: 0xe2462A45c2fa4494c60f4CCaB8b62D7e16276A8f");
         console.log("");
 
-        // Test 1: Create a Music Concert Event
+        // Create EventFactory instance
+        EventFactory factory = EventFactory(0xE5F8C19c223F1C4256E37B340b9aeec3695c6Ee5);
+        TickityNFT nftContract = TickityNFT(0xe2462A45c2fa4494c60f4CCaB8b62D7e16276A8f);
+        TickityMarketplace marketplace = TickityMarketplace(payable(0xB898d02f8e79B68a8Fe669f855A8097a4eD462a3));
+
         console.log("Creating Music Concert Event...");
         createMusicConcert(factory);
 
-        // Test 2: Create a Tech Conference Event
         console.log("Creating Tech Conference Event...");
         createTechConference(factory);
 
-        // Test 3: Create a Sports Event
         console.log("Creating Sports Event...");
         createSportsEvent(factory);
-
-        // Test 4: Test Marketplace Functionality
-        console.log("Testing Marketplace Functionality...");
-        testMarketplace(marketplace, nftContract);
 
         vm.stopBroadcast();
         
         console.log("");
-        console.log("All tests completed successfully!");
-        console.log("View events on Etherlink block explorer");
+        console.log("All events created successfully!");
+        console.log("You can now test ticket purchasing and marketplace functionality.");
     }
 
     function createMusicConcert(EventFactory factory) internal {
@@ -83,6 +75,17 @@ contract TestEvents is Script {
             ticketPrices,
             ticketQuantities,
             TICKITY_NFT
+        );
+
+        // Register event in NFT contract
+        TickityNFT nftContract = TickityNFT(TICKITY_NFT);
+        nftContract.createEvent(
+            eventAddress,
+            eventName,
+            eventDescription,
+            startTime,
+            endTime,
+            location
         );
 
         console.log("  Music Concert created at:", eventAddress);
@@ -121,6 +124,17 @@ contract TestEvents is Script {
             TICKITY_NFT
         );
 
+        // Register event in NFT contract
+        TickityNFT nftContract = TickityNFT(TICKITY_NFT);
+        nftContract.createEvent(
+            eventAddress,
+            eventName,
+            eventDescription,
+            startTime,
+            endTime,
+            location
+        );
+
         console.log("  Tech Conference created at:", eventAddress);
         console.log("  Start Time:", startTime);
         console.log("  End Time:", endTime);
@@ -155,6 +169,17 @@ contract TestEvents is Script {
             ticketPrices,
             ticketQuantities,
             TICKITY_NFT
+        );
+
+        // Register event in NFT contract
+        TickityNFT nftContract = TickityNFT(TICKITY_NFT);
+        nftContract.createEvent(
+            eventAddress,
+            eventName,
+            eventDescription,
+            startTime,
+            endTime,
+            location
         );
 
         console.log("  Sports Event created at:", eventAddress);
