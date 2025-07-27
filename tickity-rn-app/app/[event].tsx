@@ -1,6 +1,8 @@
 import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
+import NFTModal from "@/components/NFTModal";
+import TransactionProgress from "@/components/TransactionProgress";
 import { chain, client } from "@/constants/thirdweb";
 import useGetEvents from "@/hooks/useGetEvents";
 import useGetTicketPrice from "@/hooks/useGetTicketPrice";
@@ -39,6 +41,11 @@ const EventPage = () => {
   // Purchase state management
   const [purchaseState, setPurchaseState] = useState<PurchaseState>("idle");
   const [purchaseError, setPurchaseError] = useState<string>("");
+  const [currentStep, setCurrentStep] = useState<string>("");
+
+  // NFT Modal state
+  const [showNFTModal, setShowNFTModal] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string>("");
 
   // Ticket quantity state
   const [ticketQuantity, setTicketQuantity] = useState(1);
@@ -89,6 +96,7 @@ const EventPage = () => {
     try {
       setPurchaseState("loading");
       setPurchaseError("");
+      setCurrentStep("Preparing transaction...");
 
       if (!event) {
         throw new Error("Event not found");
@@ -102,7 +110,10 @@ const EventPage = () => {
       });
 
       // Purchase multiple tickets in a loop
+      let lastTransactionHash = "";
       for (let i = 0; i < ticketQuantity; i++) {
+        setCurrentStep(`Minting ticket ${i + 1} of ${ticketQuantity}...`);
+
         const transaction = prepareContractCall({
           contract: eventContract,
           method:
@@ -111,11 +122,24 @@ const EventPage = () => {
           value: ticketPrice,
         });
 
-        await sendMutation.mutateAsync({ ...transaction });
+        setCurrentStep(`Confirming transaction ${i + 1}...`);
+        const result = await sendMutation.mutateAsync({ ...transaction });
+        lastTransactionHash = result.transactionHash || "";
+
+        // Add a small delay between transactions for better UX
+        if (i < ticketQuantity - 1) {
+          setCurrentStep(`Waiting for confirmation...`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
 
+      setCurrentStep("Finalizing your NFT tickets...");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      setTransactionHash(lastTransactionHash);
       setPurchaseState("success");
       setPurchaseError("");
+      setShowNFTModal(true);
     } catch (error) {
       setPurchaseState("error");
       setPurchaseError(
@@ -126,6 +150,7 @@ const EventPage = () => {
       setTimeout(() => {
         setPurchaseState("idle");
         setPurchaseError("");
+        setCurrentStep("");
       }, 5000);
     }
   };
@@ -142,6 +167,12 @@ const EventPage = () => {
     }
 
     await purchaseTicket();
+  };
+
+  const handleCloseNFTModal = () => {
+    setShowNFTModal(false);
+    setPurchaseState("idle");
+    setPurchaseError("");
   };
 
   const formatDate = (dateString?: string) => {
@@ -206,6 +237,17 @@ const EventPage = () => {
         style={styles.container}
       >
         <SignInBottomSheet ref={signInBottomSheetRef} />
+
+        {/* NFT Modal */}
+        <NFTModal
+          visible={showNFTModal}
+          onClose={handleCloseNFTModal}
+          nftImage={event?.image}
+          eventName={event?.eventName || event?.title}
+          ticketQuantity={ticketQuantity}
+          transactionHash={transactionHash}
+        />
+
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -392,8 +434,16 @@ const EventPage = () => {
           </View>
         </ScrollView>
 
-        {/* Buy Ticket Button */}
+        {/* Transaction Progress or Buy Ticket Button */}
         <View style={styles.bottomContainer}>
+          {/* Transaction Progress */}
+          {purchaseState === "loading" && (
+            <TransactionProgress
+              currentStep={currentStep}
+              ticketQuantity={ticketQuantity}
+            />
+          )}
+
           {/* Success Message */}
           {purchaseState === "success" && (
             <View style={styles.successContainer}>
@@ -415,37 +465,30 @@ const EventPage = () => {
             </View>
           )}
 
-          <TouchableOpacity
-            style={[
-              styles.buyTicketButton,
-              !account && styles.buyTicketButtonDisabled,
-              purchaseState === "loading" && styles.buyTicketButtonLoading,
-              purchaseState === "success" && styles.buyTicketButtonSuccess,
-              purchaseState === "error" && styles.buyTicketButtonError,
-            ]}
-            onPress={handleBuyTicket}
-            disabled={purchaseState === "loading" || isLoadingPrice}
-          >
-            <LinearGradient
-              colors={
-                purchaseState === "success"
-                  ? ["#4ade80", "#22c55e"]
-                  : purchaseState === "error"
-                  ? ["#f87171", "#ef4444"]
-                  : purchaseState === "loading"
-                  ? ["#6b7280", "#4b5563"]
-                  : account
-                  ? ["#22c55e", "#16a34a"]
-                  : ["#666666", "#444444"]
-              }
-              style={styles.buttonGradient}
+          {/* Buy Ticket Button - Only show when not loading */}
+          {purchaseState !== "loading" && (
+            <TouchableOpacity
+              style={[
+                styles.buyTicketButton,
+                !account && styles.buyTicketButtonDisabled,
+                purchaseState === "success" && styles.buyTicketButtonSuccess,
+                purchaseState === "error" && styles.buyTicketButtonError,
+              ]}
+              onPress={handleBuyTicket}
+              disabled={isLoadingPrice}
             >
-              {purchaseState === "loading" ? (
-                <View style={styles.loadingButtonContent}>
-                  <ActivityIndicator size="small" color="#ffffff" />
-                  <Text style={styles.buyTicketButtonText}>Processing...</Text>
-                </View>
-              ) : (
+              <LinearGradient
+                colors={
+                  purchaseState === "success"
+                    ? ["#4ade80", "#22c55e"]
+                    : purchaseState === "error"
+                    ? ["#f87171", "#ef4444"]
+                    : account
+                    ? ["#22c55e", "#16a34a"]
+                    : ["#666666", "#444444"]
+                }
+                style={styles.buttonGradient}
+              >
                 <Text style={styles.buyTicketButtonText}>
                   {purchaseState === "success"
                     ? "Tickets Purchased!"
@@ -457,9 +500,9 @@ const EventPage = () => {
                       }`
                     : "Connect Wallet to Buy"}
                 </Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </View>
       </LinearGradient>
     </SafeAreaView>
@@ -776,19 +819,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   // Button state styles
-  buyTicketButtonLoading: {
-    opacity: 0.7,
-  },
   buyTicketButtonSuccess: {
     opacity: 0.9,
   },
   buyTicketButtonError: {
     opacity: 0.9,
-  },
-  loadingButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
   ticketSelectionCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
