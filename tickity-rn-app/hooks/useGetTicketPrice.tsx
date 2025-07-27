@@ -32,7 +32,6 @@ const useGetTicketPrice = ({
         params: [BigInt(0)],
       });
 
-      console.log(price, "price");
       return price;
     },
     enabled: enabled && !!eventId,

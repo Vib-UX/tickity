@@ -1,5 +1,6 @@
 import useGetEvents from "@/hooks/useGetEvents";
 import { Event } from "@/types/event";
+import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -13,7 +14,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 const { width, height } = Dimensions.get("window");
 
 const EventsScreen = () => {
@@ -37,7 +37,7 @@ const EventsScreen = () => {
 
         <View style={styles.eventInfo}>
           <Text style={styles.eventTitle}>
-            {item.title || `Event #${item.eventAddress}`}
+            {item.name || `Event #${item.eventAddress}`}
           </Text>
           <Text style={styles.eventDescription}>
             {item.description || "Amazing event experience awaits you"}
@@ -47,7 +47,10 @@ const EventsScreen = () => {
             <View style={styles.eventMetaItem}>
               <Text style={styles.eventMetaLabel}>Date</Text>
               <Text style={styles.eventMetaValue}>
-                {item.date || "Coming Soon"}
+                {format(
+                  new Date(Number(item.startTime) * 1000),
+                  "MMM d, yyyy"
+                ) || "Coming Soon"}
               </Text>
             </View>
             <View style={styles.eventMetaItem}>

@@ -3,9 +3,10 @@ import SignInBottomSheet, {
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModal from "@/components/NFTModal";
 import TransactionProgress from "@/components/TransactionProgress";
+import { USDT_CONTRACT_ADDRESS } from "@/constants/addresses";
 import { chain, client } from "@/constants/thirdweb";
 import useGetEvents from "@/hooks/useGetEvents";
-import useGetTicketPrice from "@/hooks/useGetTicketPrice";
+import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
 import { Event } from "@/types/event";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation } from "expo-router";
@@ -38,6 +39,10 @@ const EventPage = () => {
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
   const sendMutation = useSendAndConfirmTransaction();
 
+  // Get USDT balance
+  const { balance: usdtBalance, isLoading: isLoadingBalance } =
+    useGetUSDTBalance();
+
   // Purchase state management
   const [purchaseState, setPurchaseState] = useState<PurchaseState>("idle");
   const [purchaseError, setPurchaseError] = useState<string>("");
@@ -49,6 +54,7 @@ const EventPage = () => {
 
   // Ticket quantity state
   const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [selectedTicketType, setSelectedTicketType] = useState<string>("");
 
   // Find the specific event from the events data
   const event = useMemo(() => {
@@ -60,22 +66,20 @@ const EventPage = () => {
     ) as Event;
   }, [data, eventId]);
 
-  // Use useQuery for ticket price
-  const {
-    ticketPrice,
-    isLoading: isLoadingPrice,
-    error: priceError,
-  } = useGetTicketPrice({
-    eventId,
-    enabled: !!event,
-  });
+  // Set first ticket type as default when event data is loaded
+  useLayoutEffect(() => {
+    if (
+      event?.ticketTypes &&
+      event.ticketTypes.length > 0 &&
+      !selectedTicketType
+    ) {
+      setSelectedTicketType(event.ticketTypes[0]);
+    }
+  }, [event, selectedTicketType]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title:
-        event?.eventName ||
-        event?.title ||
-        `Event #${eventId?.slice(-6) || "N/A"}`,
+      title: event?.name || `Event #${eventId?.slice(-6) || "N/A"}`,
     });
   }, [navigation, eventId, event]);
 
@@ -88,8 +92,15 @@ const EventPage = () => {
     setTicketQuantity((prev) => Math.max(prev - 1, 1)); // Min 1 ticket
   };
 
-  // Calculate total price
-  const totalPrice = ticketPrice * BigInt(ticketQuantity);
+  // Get selected ticket type price
+  const selectedTicketIndex =
+    event?.ticketTypes?.findIndex((type) => type === selectedTicketType) ?? 0;
+  const selectedTicketPrice = event?.ticketPrices?.[selectedTicketIndex]
+    ? BigInt(event.ticketPrices[selectedTicketIndex])
+    : 0n;
+
+  // Calculate total price based on selected ticket type
+  const totalPrice = selectedTicketPrice * BigInt(ticketQuantity);
 
   // Mock API call for ticket purchase
   const purchaseTicket = async () => {
@@ -114,12 +125,32 @@ const EventPage = () => {
       for (let i = 0; i < ticketQuantity; i++) {
         setCurrentStep(`Minting ticket ${i + 1} of ${ticketQuantity}...`);
 
+        const usdtContract = getContract({
+          client,
+          address: USDT_CONTRACT_ADDRESS,
+          chain: chain,
+        });
+
+        const approveAmount = selectedTicketPrice * BigInt(ticketQuantity);
+
+        const approveTransaction = prepareContractCall({
+          contract: usdtContract,
+          method:
+            "function approve(address spender, uint256 amount) external returns (bool)",
+          params: [eventContract.address, approveAmount],
+        });
+
+        setCurrentStep(`Approving transaction ${i + 1}...`);
+        const approveResult = await sendMutation.mutateAsync({
+          ...approveTransaction,
+        });
+        lastTransactionHash = approveResult.transactionHash || "";
+
         const transaction = prepareContractCall({
           contract: eventContract,
           method:
             "function purchaseTicket(uint256 ticketTypeIndex) external payable",
-          params: [BigInt(0)],
-          value: ticketPrice,
+          params: [BigInt(selectedTicketIndex)],
         });
 
         setCurrentStep(`Confirming transaction ${i + 1}...`);
@@ -162,6 +193,19 @@ const EventPage = () => {
       return;
     }
 
+    // Check if user has enough USDT balance
+    if (usdtBalance < totalPrice) {
+      setPurchaseState("error");
+      setPurchaseError(
+        "Insufficient USDT balance. Please get more USDT to purchase tickets."
+      );
+      setTimeout(() => {
+        setPurchaseState("idle");
+        setPurchaseError("");
+      }, 5000);
+      return;
+    }
+
     if (purchaseState === "loading") {
       return; // Prevent multiple clicks
     }
@@ -192,8 +236,8 @@ const EventPage = () => {
 
   const formatPrice = (price?: string | bigint) => {
     if (!price || price === BigInt(0)) return "Free";
-    const ethPrice = parseFloat(price.toString()) / Math.pow(10, 18);
-    return `${ethPrice.toFixed(4)} ETH`;
+    const usdtPrice = parseFloat(price.toString()) / Math.pow(10, 6);
+    return `${usdtPrice.toFixed(2)} USDT`;
   };
 
   if (isLoading) {
@@ -243,7 +287,7 @@ const EventPage = () => {
           visible={showNFTModal}
           onClose={handleCloseNFTModal}
           nftImage={event?.image}
-          eventName={event?.eventName || event?.title}
+          eventName={event?.name}
           ticketQuantity={ticketQuantity}
           transactionHash={transactionHash}
         />
@@ -275,16 +319,120 @@ const EventPage = () => {
             {/* Event Title */}
             <View style={styles.eventHeader}>
               <Text style={styles.eventTitle}>
-                {event.eventName ||
-                  event.title ||
-                  `Event #${event.id.slice(-6)}`}
+                {event.name || `Event #${event.id.slice(-6)}`}
               </Text>
               <View style={styles.eventBadge}>
                 <Text style={styles.eventBadgeText}>Live Event</Text>
               </View>
             </View>
 
-            {/* 3. Buy Tickets Section */}
+            {/* USDT Balance Display */}
+            <View style={styles.balanceContainer}>
+              <View style={styles.balanceIconContainer}>
+                <Text style={styles.balanceIcon}>💰</Text>
+              </View>
+              <View style={styles.balanceContent}>
+                <Text style={styles.balanceLabel}>Your USDT Balance</Text>
+                <Text style={styles.balanceValue}>
+                  {!account
+                    ? "Connect wallet to view balance"
+                    : isLoadingBalance
+                    ? "Loading..."
+                    : `${
+                        parseFloat(usdtBalance.toString()) / Math.pow(10, 6)
+                      } USDT`}
+                </Text>
+              </View>
+              {account ? (
+                <TouchableOpacity style={styles.getUsdtButton}>
+                  <Text style={styles.getUsdtButtonText}>Get USDT</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.connectWalletButton}
+                  onPress={() => signInBottomSheetRef.current?.snapToIndex(0)}
+                >
+                  <Text style={styles.connectWalletButtonText}>
+                    Connect Wallet
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 3. Ticket Types Section */}
+            {event.ticketTypes && event.ticketTypes.length > 0 && (
+              <View style={styles.ticketTypesCard}>
+                <View style={styles.ticketTypesHeader}>
+                  <Text style={styles.ticketTypesTitle}>🎫 Ticket Types</Text>
+                  <Text style={styles.ticketTypesSubtitle}>
+                    Select your preferred ticket type
+                  </Text>
+                </View>
+
+                <View style={styles.ticketTypesContent}>
+                  {event.ticketTypes.map((ticketType, index) => {
+                    const price = event.ticketPrices?.[index] || "0";
+                    const quantity = event.ticketQuantities?.[index] || "0";
+                    const isSelected = selectedTicketType === ticketType;
+
+                    return (
+                      <TouchableOpacity
+                        key={ticketType}
+                        style={[
+                          styles.ticketTypeOption,
+                          isSelected && styles.ticketTypeOptionSelected,
+                        ]}
+                        onPress={() => setSelectedTicketType(ticketType)}
+                      >
+                        <View style={styles.ticketTypeContent}>
+                          <View style={styles.ticketTypeHeader}>
+                            <Text
+                              style={[
+                                styles.ticketTypeName,
+                                isSelected && styles.ticketTypeNameSelected,
+                              ]}
+                            >
+                              {ticketType}
+                            </Text>
+                            {isSelected && (
+                              <View style={styles.selectedIndicator}>
+                                <Text style={styles.selectedIndicatorText}>
+                                  ✓
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.ticketTypeDetails}>
+                            <Text
+                              style={[
+                                styles.ticketTypePrice,
+                                isSelected && styles.ticketTypePriceSelected,
+                              ]}
+                            >
+                              {formatPrice(BigInt(price))}
+                            </Text>
+                            {parseInt(quantity) > 0 && (
+                              <Text
+                                style={[
+                                  styles.ticketTypeQuantity,
+                                  isSelected &&
+                                    styles.ticketTypeQuantitySelected,
+                                ]}
+                              >
+                                {quantity} available
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* 4. Buy Tickets Section */}
             <View style={styles.ticketSelectionCard}>
               <View style={styles.ticketSelectionHeader}>
                 <Text style={styles.ticketSelectionTitle}>🎫 Buy Tickets</Text>
@@ -342,7 +490,7 @@ const EventPage = () => {
                 <View style={styles.priceDisplay}>
                   <Text style={styles.priceLabel}>Total Price</Text>
                   <Text style={styles.priceValue}>
-                    {isLoadingPrice ? "Loading..." : formatPrice(totalPrice)}
+                    {formatPrice(totalPrice)}
                   </Text>
                 </View>
               </View>
@@ -351,8 +499,7 @@ const EventPage = () => {
             <View style={styles.descriptionCard}>
               <Text style={styles.descriptionLabel}>About This Event</Text>
               <Text style={styles.eventDescription}>
-                {event.eventDescription ||
-                  event.description ||
+                {event.description ||
                   "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
               </Text>
             </View>
@@ -361,29 +508,27 @@ const EventPage = () => {
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Event Details</Text>
 
-              <View style={styles.detailsRow}>
-                <View style={styles.detailCard}>
-                  <View style={styles.detailIconContainer}>
-                    <Text style={styles.detailIcon}>📅</Text>
-                  </View>
-                  <View style={styles.detailContent}>
-                    <Text style={styles.detailLabel}>Date & Time</Text>
-                    <Text style={styles.detailValue}>
-                      {formatDate(event.eventDate || event.date)}
-                    </Text>
-                  </View>
+              <View style={styles.detailCard}>
+                <View style={styles.detailIconContainer}>
+                  <Text style={styles.detailIcon}>📅</Text>
                 </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Date & Time</Text>
+                  <Text style={styles.detailValue}>
+                    {formatDate(event.startTime)}
+                  </Text>
+                </View>
+              </View>
 
-                <View style={styles.detailCard}>
-                  <View style={styles.detailIconContainer}>
-                    <Text style={styles.detailIcon}>📍</Text>
-                  </View>
-                  <View style={styles.detailContent}>
-                    <Text style={styles.detailLabel}>Location</Text>
-                    <Text style={styles.detailValue}>
-                      {event.eventLocation || "TBA"}
-                    </Text>
-                  </View>
+              <View style={styles.detailCard}>
+                <View style={styles.detailIconContainer}>
+                  <Text style={styles.detailIcon}>📍</Text>
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Location</Text>
+                  <Text style={styles.detailValue}>
+                    {event.location || "TBA"}
+                  </Text>
                 </View>
               </View>
 
@@ -395,7 +540,7 @@ const EventPage = () => {
                   <View style={styles.detailContent}>
                     <Text style={styles.detailLabel}>Ticket Price</Text>
                     <Text style={styles.detailValue}>
-                      {isLoadingPrice ? "Loading..." : formatPrice(ticketPrice)}
+                      {formatPrice(selectedTicketPrice)}
                     </Text>
                   </View>
                 </View>
@@ -407,7 +552,9 @@ const EventPage = () => {
                   <View style={styles.detailContent}>
                     <Text style={styles.detailLabel}>Available</Text>
                     <Text style={styles.detailValue}>
-                      {event.maxTickets || "Unlimited"}
+                      {selectedTicketType
+                        ? event.ticketQuantities[selectedTicketIndex] || "0"
+                        : event.ticketQuantities[0] || "Unlimited"}
                     </Text>
                   </View>
                 </View>
@@ -470,12 +617,13 @@ const EventPage = () => {
             <TouchableOpacity
               style={[
                 styles.buyTicketButton,
-                !account && styles.buyTicketButtonDisabled,
+                (!account || usdtBalance < totalPrice) &&
+                  styles.buyTicketButtonDisabled,
                 purchaseState === "success" && styles.buyTicketButtonSuccess,
                 purchaseState === "error" && styles.buyTicketButtonError,
               ]}
               onPress={handleBuyTicket}
-              disabled={isLoadingPrice}
+              disabled={usdtBalance < totalPrice}
             >
               <LinearGradient
                 colors={
@@ -494,11 +642,13 @@ const EventPage = () => {
                     ? "Tickets Purchased!"
                     : purchaseState === "error"
                     ? "Try Again"
-                    : account
-                    ? `Buy ${ticketQuantity} Ticket${
+                    : !account
+                    ? "Connect Wallet to Buy"
+                    : usdtBalance < totalPrice
+                    ? "Insufficient USDT Balance"
+                    : `Buy ${ticketQuantity} Ticket${
                         ticketQuantity > 1 ? "s" : ""
-                      }`
-                    : "Connect Wallet to Buy"}
+                      }`}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -647,6 +797,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.05)",
+    marginTop: 12,
   },
   detailIconContainer: {
     width: 40,
@@ -677,7 +828,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   organizerCard: {
-    marginTop: 10,
     backgroundColor: "rgba(255, 255, 255, 0.03)",
     borderRadius: 10,
     padding: 12,
@@ -925,5 +1075,163 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
+  },
+  // Ticket Types Styles
+  ticketTypesCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ticketTypesHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  ticketTypesTitle: {
+    fontSize: 20,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  ticketTypesSubtitle: {
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+  },
+  ticketTypesContent: {
+    gap: 12,
+  },
+  ticketTypeOption: {
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  ticketTypeOptionSelected: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderColor: "rgba(34, 197, 94, 0.3)",
+  },
+  ticketTypeContent: {
+    flex: 1,
+  },
+  ticketTypeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  ticketTypeName: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    flex: 1,
+  },
+  ticketTypeNameSelected: {
+    color: "#22c55e",
+  },
+  selectedIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#22c55e",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectedIndicatorText: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  ticketTypeDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  ticketTypePrice: {
+    fontSize: 18,
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  ticketTypePriceSelected: {
+    color: "#22c55e",
+  },
+  ticketTypeQuantity: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  ticketTypeQuantitySelected: {
+    color: "rgba(34, 197, 94, 0.8)",
+  },
+  balanceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    marginBottom: 16,
+  },
+  balanceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  balanceIcon: {
+    fontSize: 20,
+    color: "#ffffff",
+  },
+  balanceContent: {
+    flex: 1,
+  },
+  balanceLabel: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  balanceValue: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  getUsdtButton: {
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.3)",
+  },
+  getUsdtButtonText: {
+    fontSize: 12,
+    color: "#22c55e",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  connectWalletButton: {
+    backgroundColor: "rgba(59, 130, 246, 0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+  },
+  connectWalletButtonText: {
+    fontSize: 12,
+    color: "#3b82f6",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

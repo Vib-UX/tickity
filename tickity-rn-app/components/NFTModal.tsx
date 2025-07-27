@@ -1,4 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
+import * as WebBrowser from "expo-web-browser";
 import React from "react";
 import {
   Dimensions,
@@ -33,6 +34,13 @@ function NFTModal({
 }: NFTModalProps) {
   const defaultNFTImage =
     "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&h=400&fit=crop";
+
+  const handleTransactionPress = () => {
+    if (transactionHash) {
+      const explorerUrl = `https://testnet.explorer.etherlink.com/tx/${transactionHash}`;
+      WebBrowser.openBrowserAsync(explorerUrl);
+    }
+  };
 
   return (
     <Modal
@@ -108,10 +116,16 @@ function NFTModal({
               {transactionHash && (
                 <View style={styles.eventDetailRow}>
                   <Text style={styles.eventDetailLabel}>Transaction:</Text>
-                  <Text style={styles.transactionHash}>
-                    {transactionHash.slice(0, 6)}...
-                    {transactionHash.slice(-4)}
-                  </Text>
+                  <TouchableOpacity
+                    onPress={handleTransactionPress}
+                    style={styles.transactionContainer}
+                  >
+                    <Text style={styles.transactionHash}>
+                      {transactionHash.slice(0, 6)}...
+                      {transactionHash.slice(-4)}
+                    </Text>
+                    <Text style={styles.externalLinkIcon}>↗</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -293,11 +307,22 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "600",
   },
+  transactionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   transactionHash: {
     fontSize: 14,
     color: "#22c55e",
     fontWeight: "600",
     fontFamily: "monospace",
+    textDecorationLine: "underline",
+  },
+  externalLinkIcon: {
+    fontSize: 12,
+    color: "#22c55e",
+    fontWeight: "600",
   },
   instructionsCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",

@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Header from "../../components/Header";
 
 export default function TabLayout() {
   return (
@@ -14,7 +15,8 @@ export default function TabLayout() {
             height: 55,
             backgroundColor: "#1a1a1a",
           },
-          headerShown: false,
+          headerShown: true,
+          header: () => <Header />,
           tabBarShowLabel: false,
           tabBarActiveTintColor: "#ffffff",
           tabBarInactiveTintColor: "#808080",
