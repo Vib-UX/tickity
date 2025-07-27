@@ -65,8 +65,8 @@ contract Deploy is Script {
         ticketTypes[1] = "General Admission";
         
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 50000; // 0.05 USDT (6 decimals)
-        prices[1] = 20000; // 0.02 USDT (6 decimals)
+        prices[0] = 3000000; // 3.0 USDT (6 decimals)
+        prices[1] = 1500000; // 1.5 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](2);
         quantities[0] = 100; // Limited VIP tickets
@@ -85,8 +85,8 @@ contract Deploy is Script {
         );
 
         console.log("Music Festival created at:", eventAddress);
-        console.log("  - VIP Pass: 100 tickets @ 0.05 USDT");
-        console.log("  - General Admission: Unlimited @ 0.02 USDT");
+        console.log("  - VIP Pass: 100 tickets @ 3.0 USDT");
+        console.log("  - General Admission: Unlimited @ 1.5 USDT");
     }
 
     function createTechEvent(EventFactory factory, TickityNFT nftContract) internal {
@@ -94,7 +94,7 @@ contract Deploy is Script {
         ticketTypes[0] = "Developer Pass";
         
         uint256[] memory prices = new uint256[](1);
-        prices[0] = 10000; // 0.01 USDT (6 decimals)
+        prices[0] = 2000000; // 2.0 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](1);
         quantities[0] = 200; // Limited tickets
@@ -112,7 +112,7 @@ contract Deploy is Script {
         );
 
         console.log("Tech Conference created at:", eventAddress);
-        console.log("  - Developer Pass: 200 tickets @ 0.01 USDT");
+        console.log("  - Developer Pass: 200 tickets @ 2.0 USDT");
     }
 
     function createSportsEvent(EventFactory factory, TickityNFT nftContract) internal {
@@ -120,7 +120,7 @@ contract Deploy is Script {
         ticketTypes[0] = "Championship Pass";
         
         uint256[] memory prices = new uint256[](1);
-        prices[0] = 30000; // 0.03 USDT (6 decimals)
+        prices[0] = 4000000; // 4.0 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](1);
         quantities[0] = 0; // Unlimited tickets
@@ -138,6 +138,6 @@ contract Deploy is Script {
         );
 
         console.log("Sports Event created at:", eventAddress);
-        console.log("  - Championship Pass: Unlimited @ 0.03 USDT");
+        console.log("  - Championship Pass: Unlimited @ 4.0 USDT");
     }
 } 
