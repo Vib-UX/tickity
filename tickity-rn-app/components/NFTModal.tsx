@@ -22,6 +22,7 @@ interface NFTModalProps {
   eventName?: string;
   ticketQuantity: number;
   transactionHash?: string;
+  onRefetch?: () => void;
 }
 
 function NFTModal({
@@ -31,6 +32,7 @@ function NFTModal({
   eventName,
   ticketQuantity,
   transactionHash,
+  onRefetch,
 }: NFTModalProps) {
   const defaultNFTImage =
     "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&h=400&fit=crop";
@@ -157,7 +159,16 @@ function NFTModal({
 
           {/* Action Buttons */}
           <View style={styles.bottomContainer}>
-            <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => {
+                // Trigger refetch for optimistic updates
+                if (onRefetch) {
+                  onRefetch();
+                }
+                onClose();
+              }}
+            >
               <LinearGradient
                 colors={["#22c55e", "#16a34a"]}
                 style={styles.buttonGradient}

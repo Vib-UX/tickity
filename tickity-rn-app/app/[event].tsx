@@ -7,6 +7,7 @@ import { USDT_CONTRACT_ADDRESS } from "@/constants/addresses";
 import { chain, client } from "@/constants/thirdweb";
 import useGetEvents from "@/hooks/useGetEvents";
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
+import useGetUserTickets from "@/hooks/useGetUserTickets";
 import { Event } from "@/types/event";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation } from "expo-router";
@@ -43,6 +44,8 @@ const EventPage = () => {
   const { balance: usdtBalance, isLoading: isLoadingBalance } =
     useGetUSDTBalance();
 
+  // Get user tickets for this event
+
   // Purchase state management
   const [purchaseState, setPurchaseState] = useState<PurchaseState>("idle");
   const [purchaseError, setPurchaseError] = useState<string>("");
@@ -65,6 +68,14 @@ const EventPage = () => {
       (event: Event) => event.eventAddress === eventId
     ) as Event;
   }, [data, eventId]);
+
+  const {
+    hasTickets,
+    ticketCount,
+    ticketsByType,
+    isLoading: isLoadingTickets,
+    refetch: refetchUserTickets,
+  } = useGetUserTickets(event?.eventAddress);
 
   // Set first ticket type as default when event data is loaded
   useLayoutEffect(() => {
@@ -290,6 +301,7 @@ const EventPage = () => {
           eventName={event?.name}
           ticketQuantity={ticketQuantity}
           transactionHash={transactionHash}
+          onRefetch={refetchUserTickets}
         />
 
         <ScrollView
@@ -326,175 +338,296 @@ const EventPage = () => {
               </View>
             </View>
 
-            {/* USDT Balance Display */}
-            <View style={styles.balanceContainer}>
-              <View style={styles.balanceIconContainer}>
-                <Text style={styles.balanceIcon}>💰</Text>
-              </View>
-              <View style={styles.balanceContent}>
-                <Text style={styles.balanceLabel}>Your USDT Balance</Text>
-                <Text style={styles.balanceValue}>
-                  {!account
-                    ? "Connect wallet to view balance"
-                    : isLoadingBalance
-                    ? "Loading..."
-                    : `${
-                        parseFloat(usdtBalance.toString()) / Math.pow(10, 6)
-                      } USDT`}
-                </Text>
-              </View>
-              {account ? (
-                <TouchableOpacity style={styles.getUsdtButton}>
-                  <Text style={styles.getUsdtButtonText}>Get USDT</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.connectWalletButton}
-                  onPress={() => signInBottomSheetRef.current?.snapToIndex(0)}
-                >
-                  <Text style={styles.connectWalletButtonText}>
-                    Connect Wallet
+            {/* USDT Balance Display - Only show if user hasn't purchased tickets */}
+            {!hasTickets && (
+              <View style={styles.balanceContainer}>
+                <View style={styles.balanceIconContainer}>
+                  <Text style={styles.balanceIcon}>💰</Text>
+                </View>
+                <View style={styles.balanceContent}>
+                  <Text style={styles.balanceLabel}>Your USDT Balance</Text>
+                  <Text style={styles.balanceValue}>
+                    {!account
+                      ? "Connect wallet to view balance"
+                      : isLoadingBalance
+                      ? "Loading..."
+                      : `${
+                          parseFloat(usdtBalance.toString()) / Math.pow(10, 6)
+                        } USDT`}
                   </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                </View>
+                {account ? (
+                  <TouchableOpacity style={styles.getUsdtButton}>
+                    <Text style={styles.getUsdtButtonText}>Get USDT</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.connectWalletButton}
+                    onPress={() => signInBottomSheetRef.current?.snapToIndex(0)}
+                  >
+                    <Text style={styles.connectWalletButtonText}>
+                      Connect Wallet
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
-            {/* 3. Ticket Types Section */}
-            {event.ticketTypes && event.ticketTypes.length > 0 && (
-              <View style={styles.ticketTypesCard}>
-                <View style={styles.ticketTypesHeader}>
-                  <Text style={styles.ticketTypesTitle}>🎫 Ticket Types</Text>
-                  <Text style={styles.ticketTypesSubtitle}>
-                    Select your preferred ticket type
+            {/* 3. Ticket Types Section - Only show if user hasn't purchased tickets */}
+            {!hasTickets &&
+              event.ticketTypes &&
+              event.ticketTypes.length > 0 && (
+                <View style={styles.ticketTypesCard}>
+                  <View style={styles.ticketTypesHeader}>
+                    <Text style={styles.ticketTypesTitle}>🎫 Ticket Types</Text>
+                    <Text style={styles.ticketTypesSubtitle}>
+                      Select your preferred ticket type
+                    </Text>
+                  </View>
+
+                  <View style={styles.ticketTypesContent}>
+                    {event.ticketTypes.map((ticketType, index) => {
+                      const price = event.ticketPrices?.[index] || "0";
+                      const quantity = event.ticketQuantities?.[index] || "0";
+                      const isSelected = selectedTicketType === ticketType;
+
+                      return (
+                        <TouchableOpacity
+                          key={ticketType}
+                          style={[
+                            styles.ticketTypeOption,
+                            isSelected && styles.ticketTypeOptionSelected,
+                          ]}
+                          onPress={() => setSelectedTicketType(ticketType)}
+                        >
+                          <View style={styles.ticketTypeContent}>
+                            <View style={styles.ticketTypeHeader}>
+                              <Text
+                                style={[
+                                  styles.ticketTypeName,
+                                  isSelected && styles.ticketTypeNameSelected,
+                                ]}
+                              >
+                                {ticketType}
+                              </Text>
+                              {isSelected && (
+                                <View style={styles.selectedIndicator}>
+                                  <Text style={styles.selectedIndicatorText}>
+                                    ✓
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <View style={styles.ticketTypeDetails}>
+                              <Text
+                                style={[
+                                  styles.ticketTypePrice,
+                                  isSelected && styles.ticketTypePriceSelected,
+                                ]}
+                              >
+                                {formatPrice(BigInt(price))}
+                              </Text>
+                              {parseInt(quantity) > 0 && (
+                                <Text
+                                  style={[
+                                    styles.ticketTypeQuantity,
+                                    isSelected &&
+                                      styles.ticketTypeQuantitySelected,
+                                  ]}
+                                >
+                                  {quantity} available
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+            {/* 4. User Tickets Status */}
+            {account && (isLoadingTickets || hasTickets) && (
+              <View style={styles.userTicketsCard}>
+                {isLoadingTickets ? (
+                  <View style={styles.loadingTicketsContainer}>
+                    <ActivityIndicator size="small" color="#22c55e" />
+                    <Text style={styles.loadingTicketsText}>
+                      Checking your tickets...
+                    </Text>
+                  </View>
+                ) : hasTickets ? (
+                  <View style={styles.myTicketsContainer}>
+                    <View style={styles.myTicketsHeader}>
+                      <Text style={styles.myTicketsIcon}>🎫</Text>
+                      <Text style={styles.myTicketsTitle}>My Tickets</Text>
+                    </View>
+
+                    <View style={styles.myTicketsContent}>
+                      <View style={styles.myTicketsInfo}>
+                        <Text style={styles.myTicketsCount}>
+                          {ticketCount} Ticket{ticketCount > 1 ? "s" : ""}
+                        </Text>
+                        <Text style={styles.myTicketsStatus}>✓ Confirmed</Text>
+                      </View>
+
+                      <View style={styles.myTicketsDetails}>
+                        <View style={styles.myTicketsDetail}>
+                          <Text style={styles.myTicketsDetailLabel}>Event</Text>
+                          <Text style={styles.myTicketsDetailValue}>
+                            {event?.name || "Event"}
+                          </Text>
+                        </View>
+
+                        <View style={styles.myTicketsDetail}>
+                          <Text style={styles.myTicketsDetailLabel}>
+                            Status
+                          </Text>
+                          <Text style={styles.myTicketsDetailValue}>
+                            Active
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Ticket Types Breakdown */}
+                      {Object.keys(ticketsByType).length > 0 && (
+                        <View style={styles.ticketTypesBreakdown}>
+                          <Text style={styles.ticketTypesBreakdownTitle}>
+                            Your Ticket Types
+                          </Text>
+                          {Object.entries(ticketsByType).map(
+                            ([typeIndex, tickets]) => {
+                              const typeIndexNum = parseInt(typeIndex);
+                              const ticketTypes = event?.ticketTypes || [];
+                              const ticketPrices = event?.ticketPrices || [];
+
+                              // Validate that the type index is within bounds
+                              const isValidTypeIndex =
+                                typeIndexNum >= 0 &&
+                                typeIndexNum < ticketTypes.length;
+
+                              const ticketTypeName = isValidTypeIndex
+                                ? ticketTypes[typeIndexNum]
+                                : `Type ${typeIndexNum + 1}`;
+
+                              const ticketPrice =
+                                isValidTypeIndex && ticketPrices[typeIndexNum]
+                                  ? formatPrice(
+                                      BigInt(ticketPrices[typeIndexNum])
+                                    )
+                                  : "Free";
+
+                              return (
+                                <View
+                                  key={typeIndex}
+                                  style={styles.ticketTypeItem}
+                                >
+                                  <View style={styles.ticketTypeItemHeader}>
+                                    <Text style={styles.ticketTypeItemName}>
+                                      {ticketTypeName}
+                                    </Text>
+                                    <Text style={styles.ticketTypeItemCount}>
+                                      {tickets.length}{" "}
+                                      {tickets.length === 1
+                                        ? "ticket"
+                                        : "tickets"}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.ticketTypeItemDetails}>
+                                    <Text style={styles.ticketTypeItemPrice}>
+                                      {ticketPrice}
+                                    </Text>
+                                    <Text style={styles.ticketTypeItemIds}>
+                                      IDs:{" "}
+                                      {tickets
+                                        .map((t) => t.ticketId.slice(-4))
+                                        .join(", ")}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            }
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            )}
+
+            {/* 5. Buy Tickets Section - Only show if user hasn't purchased tickets */}
+            {!hasTickets && (
+              <View style={styles.ticketSelectionCard}>
+                <View style={styles.ticketSelectionHeader}>
+                  <Text style={styles.ticketSelectionTitle}>
+                    🎫 Buy Tickets
+                  </Text>
+                  <Text style={styles.ticketSelectionSubtitle}>
+                    Choose how many tickets you'd like to purchase
                   </Text>
                 </View>
 
-                <View style={styles.ticketTypesContent}>
-                  {event.ticketTypes.map((ticketType, index) => {
-                    const price = event.ticketPrices?.[index] || "0";
-                    const quantity = event.ticketQuantities?.[index] || "0";
-                    const isSelected = selectedTicketType === ticketType;
-
-                    return (
-                      <TouchableOpacity
-                        key={ticketType}
+                <View style={styles.ticketSelectionContent}>
+                  <View style={styles.quantitySelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.quantityButton,
+                        ticketQuantity <= 1 && styles.quantityButtonDisabled,
+                      ]}
+                      onPress={decrementQuantity}
+                      disabled={ticketQuantity <= 1}
+                    >
+                      <Text
                         style={[
-                          styles.ticketTypeOption,
-                          isSelected && styles.ticketTypeOptionSelected,
+                          styles.quantityButtonText,
+                          ticketQuantity <= 1 &&
+                            styles.quantityButtonTextDisabled,
                         ]}
-                        onPress={() => setSelectedTicketType(ticketType)}
                       >
-                        <View style={styles.ticketTypeContent}>
-                          <View style={styles.ticketTypeHeader}>
-                            <Text
-                              style={[
-                                styles.ticketTypeName,
-                                isSelected && styles.ticketTypeNameSelected,
-                              ]}
-                            >
-                              {ticketType}
-                            </Text>
-                            {isSelected && (
-                              <View style={styles.selectedIndicator}>
-                                <Text style={styles.selectedIndicatorText}>
-                                  ✓
-                                </Text>
-                              </View>
-                            )}
-                          </View>
+                        −
+                      </Text>
+                    </TouchableOpacity>
 
-                          <View style={styles.ticketTypeDetails}>
-                            <Text
-                              style={[
-                                styles.ticketTypePrice,
-                                isSelected && styles.ticketTypePriceSelected,
-                              ]}
-                            >
-                              {formatPrice(BigInt(price))}
-                            </Text>
-                            {parseInt(quantity) > 0 && (
-                              <Text
-                                style={[
-                                  styles.ticketTypeQuantity,
-                                  isSelected &&
-                                    styles.ticketTypeQuantitySelected,
-                                ]}
-                              >
-                                {quantity} available
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                    <View style={styles.quantityDisplay}>
+                      <Text style={styles.quantityNumber}>
+                        {ticketQuantity}
+                      </Text>
+                      <Text style={styles.quantityLabel}>tickets</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.quantityButton,
+                        ticketQuantity >= 10 && styles.quantityButtonDisabled,
+                      ]}
+                      onPress={incrementQuantity}
+                      disabled={ticketQuantity >= 10}
+                    >
+                      <Text
+                        style={[
+                          styles.quantityButtonText,
+                          ticketQuantity >= 10 &&
+                            styles.quantityButtonTextDisabled,
+                        ]}
+                      >
+                        +
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.priceDisplay}>
+                    <Text style={styles.priceLabel}>Total Price</Text>
+                    <Text style={styles.priceValue}>
+                      {formatPrice(totalPrice)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             )}
 
-            {/* 4. Buy Tickets Section */}
-            <View style={styles.ticketSelectionCard}>
-              <View style={styles.ticketSelectionHeader}>
-                <Text style={styles.ticketSelectionTitle}>🎫 Buy Tickets</Text>
-                <Text style={styles.ticketSelectionSubtitle}>
-                  Choose how many tickets you'd like to purchase
-                </Text>
-              </View>
-
-              <View style={styles.ticketSelectionContent}>
-                <View style={styles.quantitySelector}>
-                  <TouchableOpacity
-                    style={[
-                      styles.quantityButton,
-                      ticketQuantity <= 1 && styles.quantityButtonDisabled,
-                    ]}
-                    onPress={decrementQuantity}
-                    disabled={ticketQuantity <= 1}
-                  >
-                    <Text
-                      style={[
-                        styles.quantityButtonText,
-                        ticketQuantity <= 1 &&
-                          styles.quantityButtonTextDisabled,
-                      ]}
-                    >
-                      −
-                    </Text>
-                  </TouchableOpacity>
-
-                  <View style={styles.quantityDisplay}>
-                    <Text style={styles.quantityNumber}>{ticketQuantity}</Text>
-                    <Text style={styles.quantityLabel}>tickets</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.quantityButton,
-                      ticketQuantity >= 10 && styles.quantityButtonDisabled,
-                    ]}
-                    onPress={incrementQuantity}
-                    disabled={ticketQuantity >= 10}
-                  >
-                    <Text
-                      style={[
-                        styles.quantityButtonText,
-                        ticketQuantity >= 10 &&
-                          styles.quantityButtonTextDisabled,
-                      ]}
-                    >
-                      +
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.priceDisplay}>
-                  <Text style={styles.priceLabel}>Total Price</Text>
-                  <Text style={styles.priceValue}>
-                    {formatPrice(totalPrice)}
-                  </Text>
-                </View>
-              </View>
-            </View>
             {/* 1. About Section */}
             <View style={styles.descriptionCard}>
               <Text style={styles.descriptionLabel}>About This Event</Text>
@@ -553,8 +686,8 @@ const EventPage = () => {
                     <Text style={styles.detailLabel}>Available</Text>
                     <Text style={styles.detailValue}>
                       {selectedTicketType
-                        ? event.ticketQuantities[selectedTicketIndex] || "0"
-                        : event.ticketQuantities[0] || "Unlimited"}
+                        ? event?.ticketQuantities?.[selectedTicketIndex] || "0"
+                        : event?.ticketQuantities?.[0] || "Unlimited"}
                     </Text>
                   </View>
                 </View>
@@ -612,8 +745,8 @@ const EventPage = () => {
             </View>
           )}
 
-          {/* Buy Ticket Button - Only show when not loading */}
-          {purchaseState !== "loading" && (
+          {/* Buy Ticket Button - Only show when not loading and user hasn't purchased tickets */}
+          {purchaseState !== "loading" && !hasTickets && (
             <TouchableOpacity
               style={[
                 styles.buyTicketButton,
@@ -1233,5 +1366,181 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  // User Tickets Styles
+  userTicketsCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    marginBottom: 16,
+  },
+  loadingTicketsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  loadingTicketsText: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginLeft: 8,
+  },
+  purchasedTicketsContainer: {
+    alignItems: "center",
+  },
+  purchasedTicketsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  purchasedTicketsIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  purchasedTicketsTitle: {
+    fontSize: 18,
+    color: "#22c55e",
+    fontWeight: "600",
+  },
+  purchasedTicketsSubtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.7)",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  purchasedTicketsBadge: {
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.3)",
+  },
+  purchasedTicketsBadgeText: {
+    fontSize: 12,
+    color: "#22c55e",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  // My Tickets Styles
+  myTicketsContainer: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.2)",
+  },
+  myTicketsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  myTicketsIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  myTicketsTitle: {
+    fontSize: 20,
+    color: "#22c55e",
+    fontWeight: "600",
+  },
+  myTicketsContent: {
+    gap: 12,
+  },
+  myTicketsInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.2)",
+  },
+  myTicketsCount: {
+    fontSize: 18,
+    color: "#22c55e",
+    fontWeight: "600",
+  },
+  myTicketsStatus: {
+    fontSize: 14,
+    color: "#22c55e",
+    fontWeight: "500",
+  },
+  myTicketsDetails: {
+    gap: 8,
+  },
+  myTicketsDetail: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 8,
+    padding: 8,
+  },
+  myTicketsDetailLabel: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  myTicketsDetailValue: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+  // Ticket Types Breakdown Styles
+  ticketTypesBreakdown: {
+    marginTop: 12,
+    gap: 8,
+  },
+  ticketTypesBreakdownTitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.7)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  ticketTypeItem: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ticketTypeItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  ticketTypeItemName: {
+    fontSize: 16,
+    color: "#22c55e",
+    fontWeight: "600",
+  },
+  ticketTypeItemCount: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  ticketTypeItemDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  ticketTypeItemPrice: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+  ticketTypeItemIds: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.5)",
+    fontFamily: "monospace",
   },
 });
