@@ -49,9 +49,9 @@ contract CreateRealEvents is Script {
         ticketTypes[2] = "General Admission";
         
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 0.15 ether;  // 0.15 ETH
-        prices[1] = 0.08 ether;  // 0.08 ETH
-        prices[2] = 0.03 ether;  // 0.03 ETH
+        prices[0] = 150000;  // 0.15 USDT (6 decimals)
+        prices[1] = 80000;   // 0.08 USDT (6 decimals)
+        prices[2] = 30000;   // 0.03 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](3);
         quantities[0] = 50;   // Limited VIP Platinum
@@ -71,9 +71,9 @@ contract CreateRealEvents is Script {
         );
 
         console.log("   Music Festival created at:", eventAddress);
-        console.log("   VIP Platinum: 50 tickets @ 0.15 ETH");
-        console.log("   VIP Gold: 200 tickets @ 0.08 ETH");
-        console.log("   General Admission: Unlimited @ 0.03 ETH");
+        console.log("   VIP Platinum: 50 tickets @ 0.15 USDT");
+        console.log("   VIP Gold: 200 tickets @ 0.08 USDT");
+        console.log("   General Admission: Unlimited @ 0.03 USDT");
         console.log("");
     }
 
@@ -85,8 +85,8 @@ contract CreateRealEvents is Script {
         ticketTypes[1] = "Student Pass";
         
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 0.05 ether;  // 0.05 ETH
-        prices[1] = 0.02 ether;  // 0.02 ETH
+        prices[0] = 50000;  // 0.05 USDT (6 decimals)
+        prices[1] = 20000;  // 0.02 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](2);
         quantities[0] = 500;  // Limited Developer Pass
@@ -105,8 +105,8 @@ contract CreateRealEvents is Script {
         );
 
         console.log("   Tech Conference created at:", eventAddress);
-        console.log("   Developer Pass: 500 tickets @ 0.05 ETH");
-        console.log("   Student Pass: 100 tickets @ 0.02 ETH");
+        console.log("   Developer Pass: 500 tickets @ 0.05 USDT");
+        console.log("   Student Pass: 100 tickets @ 0.02 USDT");
         console.log("");
     }
 
@@ -120,10 +120,10 @@ contract CreateRealEvents is Script {
         ticketTypes[3] = "Standing Room";
         
         uint256[] memory prices = new uint256[](4);
-        prices[0] = 0.25 ether;  // 0.25 ETH
-        prices[1] = 0.12 ether;  // 0.12 ETH
-        prices[2] = 0.06 ether;  // 0.06 ETH
-        prices[3] = 0.02 ether;  // 0.02 ETH
+        prices[0] = 250000;  // 0.25 USDT (6 decimals)
+        prices[1] = 120000;  // 0.12 USDT (6 decimals)
+        prices[2] = 60000;   // 0.06 USDT (6 decimals)
+        prices[3] = 20000;   // 0.02 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](4);
         quantities[0] = 20;   // Limited Championship Box
@@ -144,10 +144,10 @@ contract CreateRealEvents is Script {
         );
 
         console.log("   Sports Championship created at:", eventAddress);
-        console.log("   Championship Box: 20 tickets @ 0.25 ETH");
-        console.log("   Premium Seating: 100 tickets @ 0.12 ETH");
-        console.log("   Standard Seating: 1000 tickets @ 0.06 ETH");
-        console.log("   Standing Room: Unlimited @ 0.02 ETH");
+        console.log("   Championship Box: 20 tickets @ 0.25 USDT");
+        console.log("   Premium Seating: 100 tickets @ 0.12 USDT");
+        console.log("   Standard Seating: 1000 tickets @ 0.06 USDT");
+        console.log("   Standing Room: Unlimited @ 0.02 USDT");
         console.log("");
     }
 
@@ -159,8 +159,8 @@ contract CreateRealEvents is Script {
         ticketTypes[1] = "General Admission";
         
         uint256[] memory prices = new uint256[](2);
-        prices[0] = 0.08 ether;  // 0.08 ETH
-        prices[1] = 0.015 ether; // 0.015 ETH
+        prices[0] = 80000;  // 0.08 USDT (6 decimals)
+        prices[1] = 15000;  // 0.015 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](2);
         quantities[0] = 75;  // Limited Curator Pass
@@ -179,8 +179,8 @@ contract CreateRealEvents is Script {
         );
 
         console.log("   Art Exhibition created at:", eventAddress);
-        console.log("   Curator Pass: 75 tickets @ 0.08 ETH");
-        console.log("   General Admission: Unlimited @ 0.015 ETH");
+        console.log("   Curator Pass: 75 tickets @ 0.08 USDT");
+        console.log("   General Admission: Unlimited @ 0.015 USDT");
         console.log("");
     }
 
@@ -193,9 +193,9 @@ contract CreateRealEvents is Script {
         ticketTypes[2] = "General Admission";
         
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 0.06 ether;  // 0.06 ETH
-        prices[1] = 0.04 ether;  // 0.04 ETH
-        prices[2] = 0.02 ether;  // 0.02 ETH
+        prices[0] = 60000;  // 0.06 USDT (6 decimals)
+        prices[1] = 40000;  // 0.04 USDT (6 decimals)
+        prices[2] = 20000;  // 0.02 USDT (6 decimals)
         
         uint256[] memory quantities = new uint256[](3);
         quantities[0] = 10;  // Limited VIP Table
@@ -215,9 +215,9 @@ contract CreateRealEvents is Script {
         );
 
         console.log("   Comedy Show created at:", eventAddress);
-        console.log("   VIP Table: 10 tickets @ 0.06 ETH");
-        console.log("   Premium Seating: 50 tickets @ 0.04 ETH");
-        console.log("   General Admission: Unlimited @ 0.02 ETH");
+        console.log("   VIP Table: 10 tickets @ 0.06 USDT");
+        console.log("   Premium Seating: 50 tickets @ 0.04 USDT");
+        console.log("   General Admission: Unlimited @ 0.02 USDT");
         console.log("");
     }
 } 
