@@ -19,7 +19,9 @@
         "NSCameraUsageDescription": "This app uses the camera for AR experiences.",
         "ARKit": true
       },
-      "capabilities": ["ARKit"]
+      "capabilities": [
+        "ARKit"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +37,9 @@
       "intentFilters": [
         {
           "action": "android.intent.action.MAIN",
-          "category": ["android.intent.category.LAUNCHER"]
+          "category": [
+            "android.intent.category.LAUNCHER"
+          ]
         }
       ]
     },
@@ -64,6 +68,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a0292d18-2584-4b18-94d4-90b52bb0e5bb"
+      }
     }
   }
 }

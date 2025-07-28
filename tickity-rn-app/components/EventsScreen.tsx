@@ -95,15 +95,17 @@ const EventsScreen = () => {
           </View>
         ) : (
           <View style={styles.eventsContainer}>
-            <View style={styles.eventsHeader}>
-              <Text style={styles.eventsTitle}>Recent Events</Text>
-              <Text style={styles.eventsSubtitle}>
-                Discover amazing events happening around you
-              </Text>
-            </View>
             <FlatList
               data={(data as any)?.eventCreateds || []}
               renderItem={renderEventItem}
+              ListHeaderComponent={() => (
+                <View style={styles.eventsHeader}>
+                  <Text style={styles.eventsTitle}>Discover Events</Text>
+                  <Text style={styles.eventsSubtitle}>
+                    Discover amazing events happening around you
+                  </Text>
+                </View>
+              )}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.flatListContent}
@@ -199,7 +201,7 @@ const styles = StyleSheet.create({
   eventsHeader: {
     alignItems: "flex-start",
     marginBottom: 24,
-    paddingHorizontal: 20,
+    marginTop: 10,
   },
   eventsTitle: {
     fontSize: 28,
