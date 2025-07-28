@@ -1,5 +1,6 @@
-import { createThirdwebClient } from "thirdweb";
+import { createThirdwebClient, getContract } from "thirdweb";
 import { etherlinkTestnet } from "thirdweb/chains";
+import { USDT_CONTRACT_ADDRESS } from "./addresses";
 
 export const chain = etherlinkTestnet;
 
@@ -14,4 +15,10 @@ if (!clientId) {
 export const client = createThirdwebClient({
   clientId,
   secretKey,
+});
+
+export const usdcContract = getContract({
+  client,
+  address: USDT_CONTRACT_ADDRESS,
+  chain: chain,
 });

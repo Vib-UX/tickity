@@ -74,8 +74,6 @@ export default function ThirdwebScreen() {
           wallets={wallets}
           auth={{
             async doLogin(params) {
-              // fake delay
-              await new Promise((resolve) => setTimeout(resolve, 2000));
               const verifiedPayload = await thirdwebAuth.verifyPayload(params);
               isLoggedIn = verifiedPayload.valid;
             },
