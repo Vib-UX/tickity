@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "./Event.sol";
+import "./POAP.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -10,14 +11,17 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @dev Factory contract for creating and managing individual event contracts
  */
 contract EventFactory is Ownable, ReentrancyGuard {
-    constructor(address _usdtContract) Ownable(msg.sender) {
+    constructor(address _usdtContract, address _poapContract) Ownable(msg.sender) {
         usdtContract = _usdtContract;
+        poapContract = _poapContract;
     }
     // State variables
     mapping(uint256 => address) public events;
     mapping(address => uint256[]) public organizerEvents;
     uint256 public eventCount;
     address public usdtContract;
+    address public poapContract;
+
     
     // Events with comprehensive details for subgraph
     event EventCreated(
@@ -114,7 +118,8 @@ contract EventFactory is Ownable, ReentrancyGuard {
             ticketQuantities,
             nftContract,
             msg.sender,
-            usdtContract
+            usdtContract,
+            poapContract
         );
         
         events[eventCount] = address(newEvent);
@@ -133,6 +138,8 @@ contract EventFactory is Ownable, ReentrancyGuard {
             endTime,
             location
         );
+        
+
         
         // Emit factory event creation event (Event contract will emit its own detailed event)
         emit EventCreated(

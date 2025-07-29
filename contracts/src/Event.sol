@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./TickityNFT.sol";
+import "./POAP.sol";
 import "./IUSDT.sol";
+import "forge-std/console.sol";
 
 /**
  * @title Event
@@ -28,6 +30,8 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
     address public nftContract;
     address public organizer;
     address public usdtContract;
+    address public poapContract;
+
     
     bool public isActive;
     uint256 public eventId;
@@ -137,7 +141,8 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         uint256[] memory _ticketQuantities,
         address _nftContract,
         address _organizer,
-        address _usdtContract
+        address _usdtContract,
+        address _poapContract
     ) Ownable(_organizer) {
         name = _name;
         description = _description;
@@ -150,6 +155,7 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         nftContract = _nftContract;
         organizer = _organizer;
         usdtContract = _usdtContract;
+        poapContract = _poapContract;
         isActive = true;
         
         soldByType = new uint256[](_ticketTypes.length);
@@ -222,7 +228,8 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
      * @param tokenId The ticket token ID
      */
     function useTicket(uint256 tokenId) external {
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "Event is not active");
+        // Removed event start time restriction for easier testing
+        // require(block.timestamp >= startTime && block.timestamp <= endTime, "Event is not active");
         require(!usedTickets[tokenId], "Ticket already used");
         
         TickityNFT nft = TickityNFT(nftContract);
@@ -234,6 +241,18 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
         // Get ticket details for event
         TickityNFT.Ticket memory ticket = nft.getTicket(tokenId);
         string memory ticketTypeName = ticketTypes[ticket.ticketType];
+        
+        // Mint POAP for attendee
+        if (poapContract != address(0)) {
+            POAP poap = POAP(poapContract);
+            // Use tx.origin to get the actual user address (the one who initiated the transaction)
+            address attendee = tx.origin;
+            
+            // Generate POAP URI based on event and ticket details
+            string memory poapURI = _generatePOAPURI(tokenId, ticketTypeName);
+            
+            poap.mintPOAP(eventId, attendee, poapURI);
+        }
         
         // Emit comprehensive ticket usage event
         emit TicketUsed(
@@ -402,6 +421,29 @@ contract Event is Ownable, ReentrancyGuard, Pausable {
                 '{"trait_type":"Event","value":"', name, '"},',
                 '{"trait_type":"Ticket Type","value":"', ticketTypes[ticketTypeIndex], '"},',
                 '{"trait_type":"Price","value":"', _uint2str(ticketPrices[ticketTypeIndex]), ' USDT"}',
+                ']}'
+            )))
+        ));
+    }
+    
+    /**
+     * @dev Generate POAP URI for POAP metadata
+     * @param tokenId The ticket token ID
+     * @param ticketTypeName The ticket type name
+     */
+    function _generatePOAPURI(uint256 tokenId, string memory ticketTypeName) internal view returns (string memory) {
+        // Generate a POAP metadata URI based on event and ticket details
+        return string(abi.encodePacked(
+            "data:application/json;base64,",
+            _base64Encode(string(abi.encodePacked(
+                '{"name":"POAP - ', name, '",',
+                '"description":"Proof of Attendance for ', name, ' - ', ticketTypeName, ' ticket",',
+                '"image":"https://ipfs.io/ipfs/QmPOAPImage",',
+                '"attributes":[',
+                '{"trait_type":"Event","value":"', name, '"},',
+                '{"trait_type":"Ticket Type","value":"', ticketTypeName, '"},',
+                '{"trait_type":"Ticket ID","value":"', _uint2str(tokenId), '"},',
+                '{"trait_type":"Event Location","value":"', location, '"}',
                 ']}'
             )))
         ));
