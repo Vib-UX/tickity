@@ -1,25 +1,51 @@
+export interface EventResponse {
+  id: string;
+  name: string;
+  description: string;
+  contractId_: string;
+  createdAt: string;
+  block_number: string;
+  endTime: string;
+  eventAddress: string;
+  eventId: string;
+  location: string;
+  nftContract: string;
+  organizer: string;
+  image: string;
+  startTime: string;
+  ticketPrices: string;
+  ticketQuantities: string;
+  ticketTypes: string;
+  timestamp_: string;
+  transactionHash_: string;
+}
 export interface Event {
   id: string;
-  transactionHash_: string;
-  blockNumber?: string;
-  blockTimestamp?: string;
-  eventName?: string;
-  eventDescription?: string;
-  eventDate?: string;
-  eventLocation?: string;
-  ticketPrice?: string;
-  maxTickets?: string;
-  organizer?: string;
-  image?: string;
-  title?: string;
-  description?: string;
-  date?: string;
-  eventAddress?: string;
+  name: string;
+  description: string;
+  contractId_: string;
+  createdAt: string;
+  block_number: string;
+  endTime: string;
+  eventAddress: string;
   eventId: string;
+  location: string;
+  nftContract: string;
+  organizer: string;
+  image: string;
+  startTime: string;
+  ticketPrices: string[];
+  ticketQuantities: string[];
+  ticketTypes: string[];
+  timestamp_: string;
+  transactionHash_: string;
 }
 
+export interface EventResponseDetailed {
+  eventCreatedDetaileds: EventResponse[];
+}
 export interface EventsData {
-  eventCreateds: Event[];
+  eventCreatedDetaileds: Event[];
 }
 
 export interface TicketPurchaseParams {

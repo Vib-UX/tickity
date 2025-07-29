@@ -3,6 +3,18 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Header from "../../components/Header";
+
+import {
+  configureReanimatedLogger,
+  ReanimatedLogLevel,
+} from "react-native-reanimated";
+
+// This is the default configuration
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false, // Reanimated runs in strict mode by default
+});
 
 export default function TabLayout() {
   return (
@@ -14,7 +26,8 @@ export default function TabLayout() {
             height: 55,
             backgroundColor: "#1a1a1a",
           },
-          headerShown: false,
+          headerShown: true,
+          header: () => <Header />,
           tabBarShowLabel: false,
           tabBarActiveTintColor: "#ffffff",
           tabBarInactiveTintColor: "#808080",

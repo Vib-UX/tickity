@@ -6,10 +6,10 @@ import {
   useColorScheme,
 } from "react-native";
 import { createAuth } from "thirdweb/auth";
+import { etherlink } from "thirdweb/chains";
 import { ConnectButton, ConnectEmbed, useActiveAccount } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { inAppWallet } from "thirdweb/wallets/in-app";
-
 import { chain, client } from "../constants/thirdweb";
 
 const wallets = [
@@ -18,23 +18,16 @@ const wallets = [
       options: ["google", "facebook", "discord", "telegram", "email", "phone"],
       passkeyDomain: "thirdweb.com",
     },
+    executionMode: {
+      mode: "EIP7702",
+      sponsorGas: true,
+    },
     smartAccount: {
       chain: chain,
       sponsorGas: true,
     },
   }),
   createWallet("io.metamask"),
-  createWallet("com.coinbase.wallet", {
-    appMetadata: {
-      name: "Thirdweb RN Demo",
-    },
-    mobileConfig: {
-      callbackURL: "com.thirdweb.demo://",
-    },
-    walletConfig: {
-      options: "smartWalletOnly",
-    },
-  }),
   createWallet("me.rainbow"),
   createWallet("com.trustwallet.app"),
   createWallet("io.zerion.wallet"),
@@ -65,6 +58,10 @@ export default function ThirdwebScreen() {
           theme={theme || "dark"}
           wallets={wallets}
           chain={chain}
+          accountAbstraction={{
+            chain: etherlink,
+            sponsorGas: true,
+          }}
         />
       ) : (
         <ConnectEmbed
@@ -72,10 +69,12 @@ export default function ThirdwebScreen() {
           theme={theme || "dark"}
           chain={chain}
           wallets={wallets}
+          accountAbstraction={{
+            chain: etherlink,
+            sponsorGas: true,
+          }}
           auth={{
             async doLogin(params) {
-              // fake delay
-              await new Promise((resolve) => setTimeout(resolve, 2000));
               const verifiedPayload = await thirdwebAuth.verifyPayload(params);
               isLoggedIn = verifiedPayload.valid;
             },
@@ -101,7 +100,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-
   stepContainer: {
     gap: 8,
     marginBottom: 8,

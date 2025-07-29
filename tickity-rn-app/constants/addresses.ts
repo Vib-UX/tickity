@@ -1,0 +1,2 @@
+export const USDT_CONTRACT_ADDRESS =
+  "0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B";

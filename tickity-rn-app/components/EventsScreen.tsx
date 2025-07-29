@@ -1,5 +1,6 @@
 import useGetEvents from "@/hooks/useGetEvents";
 import { Event } from "@/types/event";
+import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -13,7 +14,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 const { width, height } = Dimensions.get("window");
 
 const EventsScreen = () => {
@@ -26,9 +26,7 @@ const EventsScreen = () => {
         <View style={styles.eventImageContainer}>
           <Image
             source={{
-              uri:
-                item.image ||
-                "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=200&fit=crop",
+              uri: item.image,
             }}
             style={styles.eventImage}
             resizeMode="cover"
@@ -37,7 +35,7 @@ const EventsScreen = () => {
 
         <View style={styles.eventInfo}>
           <Text style={styles.eventTitle}>
-            {item.title || `Event #${item.eventAddress}`}
+            {item.name || `Event #${item.eventAddress}`}
           </Text>
           <Text style={styles.eventDescription}>
             {item.description || "Amazing event experience awaits you"}
@@ -47,7 +45,10 @@ const EventsScreen = () => {
             <View style={styles.eventMetaItem}>
               <Text style={styles.eventMetaLabel}>Date</Text>
               <Text style={styles.eventMetaValue}>
-                {item.date || "Coming Soon"}
+                {format(
+                  new Date(Number(item.startTime) * 1000),
+                  "MMM d, yyyy"
+                ) || "Coming Soon"}
               </Text>
             </View>
             <View style={styles.eventMetaItem}>
@@ -92,15 +93,17 @@ const EventsScreen = () => {
           </View>
         ) : (
           <View style={styles.eventsContainer}>
-            <View style={styles.eventsHeader}>
-              <Text style={styles.eventsTitle}>Recent Events</Text>
-              <Text style={styles.eventsSubtitle}>
-                Discover amazing events happening around you
-              </Text>
-            </View>
             <FlatList
               data={(data as any)?.eventCreateds || []}
               renderItem={renderEventItem}
+              ListHeaderComponent={() => (
+                <View style={styles.eventsHeader}>
+                  <Text style={styles.eventsTitle}>Discover Events</Text>
+                  <Text style={styles.eventsSubtitle}>
+                    Discover amazing events happening around you
+                  </Text>
+                </View>
+              )}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.flatListContent}
@@ -196,7 +199,7 @@ const styles = StyleSheet.create({
   eventsHeader: {
     alignItems: "flex-start",
     marginBottom: 24,
-    paddingHorizontal: 20,
+    marginTop: 10,
   },
   eventsTitle: {
     fontSize: 28,
