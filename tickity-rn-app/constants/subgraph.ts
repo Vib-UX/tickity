@@ -73,11 +73,13 @@ const getEvents = async () => {
     const enhancedEvents = response.eventCreatedDetaileds.map(
       (event: EventResponse) => {
         const eventId = event.eventId;
-        const details = eventDetailsMap[eventId];
+        const image = eventDetailsMap[eventId]
+          ? eventDetailsMap[eventId].image
+          : "https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop";
 
         return {
           ...event,
-          ...details,
+          image,
           ticketTypes: event.ticketTypes.split(","),
           ticketQuantities: event.ticketQuantities.split(","),
           ticketPrices: event.ticketPrices.split(","),

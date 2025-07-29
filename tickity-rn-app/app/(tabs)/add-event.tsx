@@ -152,7 +152,6 @@ const AddEvent = () => {
     setIsSubmitting(true);
     try {
       // TODO: Implement actual API call to create event
-      console.log("Creating event:", formData);
 
       Alert.alert("Success", "Event created successfully!", [
         {

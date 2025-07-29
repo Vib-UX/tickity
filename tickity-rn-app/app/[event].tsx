@@ -3,8 +3,7 @@ import SignInBottomSheet, {
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModal from "@/components/NFTModal";
 import TransactionProgress from "@/components/TransactionProgress";
-import { USDT_CONTRACT_ADDRESS } from "@/constants/addresses";
-import { chain, client } from "@/constants/thirdweb";
+import { chain, client, usdcContract } from "@/constants/thirdweb";
 import useGetEvents from "@/hooks/useGetEvents";
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
 import useGetUserTickets from "@/hooks/useGetUserTickets";
@@ -23,8 +22,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getContract, prepareContractCall } from "thirdweb";
-import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
+import { getContract, getContractEvents, prepareContractCall } from "thirdweb";
+import { approve } from "thirdweb/extensions/erc20";
+import { useActiveAccount, useSendCalls } from "thirdweb/react";
+import { formatNumber } from "thirdweb/utils";
 
 const { width, height } = Dimensions.get("window");
 
@@ -38,11 +39,20 @@ const EventPage = () => {
   const account = useActiveAccount();
   const { data, isLoading, error } = useGetEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
-  const sendMutation = useSendAndConfirmTransaction();
 
-  // Get USDT balance
-  const { balance: usdtBalance, isLoading: isLoadingBalance } =
-    useGetUSDTBalance();
+  const id = eventId.split("-")[0];
+
+  const eventContract = getContract({
+    client,
+    address: id,
+    chain: chain,
+  });
+
+  const {
+    balance: usdtBalance,
+    isLoading: isLoadingBalance,
+    refetch: refetchUSDTBalance,
+  } = useGetUSDTBalance();
 
   // Get user tickets for this event
 
@@ -59,15 +69,16 @@ const EventPage = () => {
   const [ticketQuantity, setTicketQuantity] = useState(1);
   const [selectedTicketType, setSelectedTicketType] = useState<string>("");
 
-  // Find the specific event from the events data
   const event = useMemo(() => {
     if (!data || !eventId) return null;
-    const events = (data as any)?.eventCreateds;
+    const events = data.eventCreateds;
     if (!events || !Array.isArray(events)) return null;
     return events.find(
       (event: Event) => event.eventAddress === eventId
     ) as Event;
   }, [data, eventId]);
+
+  const { mutateAsync: sendCalls } = useSendCalls();
 
   const {
     hasTickets,
@@ -77,7 +88,6 @@ const EventPage = () => {
     refetch: refetchUserTickets,
   } = useGetUserTickets(event?.eventAddress);
 
-  // Set first ticket type as default when event data is loaded
   useLayoutEffect(() => {
     if (
       event?.ticketTypes &&
@@ -103,19 +113,17 @@ const EventPage = () => {
     setTicketQuantity((prev) => Math.max(prev - 1, 1)); // Min 1 ticket
   };
 
-  // Get selected ticket type price
   const selectedTicketIndex =
     event?.ticketTypes?.findIndex((type) => type === selectedTicketType) ?? 0;
   const selectedTicketPrice = event?.ticketPrices?.[selectedTicketIndex]
     ? BigInt(event.ticketPrices[selectedTicketIndex])
     : 0n;
 
-  // Calculate total price based on selected ticket type
   const totalPrice = selectedTicketPrice * BigInt(ticketQuantity);
 
-  // Mock API call for ticket purchase
   const purchaseTicket = async () => {
     try {
+      setTransactionHash("");
       setPurchaseState("loading");
       setPurchaseError("");
       setCurrentStep("Preparing transaction...");
@@ -124,71 +132,60 @@ const EventPage = () => {
         throw new Error("Event not found");
       }
 
-      const id = eventId.split("-")[0];
-      const eventContract = getContract({
-        client,
-        address: id,
-        chain: chain,
+      const approveAmount = selectedTicketPrice * BigInt(ticketQuantity);
+
+      const sendTx1 = approve({
+        contract: usdcContract,
+        amount: formatNumber(Number(approveAmount), 6),
+        spender: eventContract.address,
       });
 
-      // Purchase multiple tickets in a loop
-      let lastTransactionHash = "";
-      for (let i = 0; i < ticketQuantity; i++) {
-        setCurrentStep(`Minting ticket ${i + 1} of ${ticketQuantity}...`);
-
-        const usdtContract = getContract({
-          client,
-          address: USDT_CONTRACT_ADDRESS,
-          chain: chain,
-        });
-
-        const approveAmount = selectedTicketPrice * BigInt(ticketQuantity);
-
-        const approveTransaction = prepareContractCall({
-          contract: usdtContract,
-          method:
-            "function approve(address spender, uint256 amount) external returns (bool)",
-          params: [eventContract.address, approveAmount],
-        });
-
-        setCurrentStep(`Approving transaction ${i + 1}...`);
-        const approveResult = await sendMutation.mutateAsync({
-          ...approveTransaction,
-        });
-        lastTransactionHash = approveResult.transactionHash || "";
-
-        const transaction = prepareContractCall({
-          contract: eventContract,
-          method:
-            "function purchaseTicket(uint256 ticketTypeIndex) external payable",
-          params: [BigInt(selectedTicketIndex)],
-        });
-
-        setCurrentStep(`Confirming transaction ${i + 1}...`);
-        const result = await sendMutation.mutateAsync({ ...transaction });
-        lastTransactionHash = result.transactionHash || "";
-
-        // Add a small delay between transactions for better UX
-        if (i < ticketQuantity - 1) {
-          setCurrentStep(`Waiting for confirmation...`);
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-      }
-
+      const sendTx2 = prepareContractCall({
+        contract: eventContract,
+        method:
+          "function purchaseTicket(uint256 ticketTypeIndex) external payable",
+        params: [BigInt(selectedTicketIndex)],
+      });
+      await sendCalls({
+        calls: [sendTx1, sendTx2],
+      });
+      refetchUSDTBalance();
       setCurrentStep("Finalizing your NFT tickets...");
       await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      setTransactionHash(lastTransactionHash);
       setPurchaseState("success");
       setPurchaseError("");
       setShowNFTModal(true);
+      refetchUserTickets();
     } catch (error) {
-      setPurchaseState("error");
+      const logs = await getContractEvents({
+        contract: eventContract,
+        events: [
+          {
+            // @ts-ignore
+            name: "TicketPurchased",
+            inputs: [
+              {
+                name: "buyer",
+                type: "address",
+              },
+            ],
+          },
+        ],
+      });
+      const tx = logs[logs.length - 1];
+      if (tx.transactionHash) {
+        setTransactionHash(tx.transactionHash);
+        setCurrentStep("Finalizing your NFT tickets...");
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        setPurchaseState("success");
+        setPurchaseError("");
+        setShowNFTModal(true);
+        refetchUserTickets();
+        return;
+      }
       setPurchaseError(
         error instanceof Error ? error.message : "An unexpected error occurred"
       );
-
-      // Reset error state after 5 seconds
       setTimeout(() => {
         setPurchaseState("idle");
         setPurchaseError("");
@@ -746,7 +743,7 @@ const EventPage = () => {
           )}
 
           {/* Buy Ticket Button - Only show when not loading and user hasn't purchased tickets */}
-          {purchaseState !== "loading" && !hasTickets && (
+          {purchaseState !== "loading" && (
             <TouchableOpacity
               style={[
                 styles.buyTicketButton,

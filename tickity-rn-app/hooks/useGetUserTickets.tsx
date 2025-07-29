@@ -34,8 +34,6 @@ const useGetUserTickets = (eventAddress?: string) => {
           params: [account.address],
         });
 
-        console.log(userTickets, "userTickets");
-
         // Get ticket types for each ticket ID
         const ticketDetails = [];
         if (userTickets && Array.isArray(userTickets)) {

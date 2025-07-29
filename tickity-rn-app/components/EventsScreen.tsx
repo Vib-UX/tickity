@@ -26,9 +26,7 @@ const EventsScreen = () => {
         <View style={styles.eventImageContainer}>
           <Image
             source={{
-              uri:
-                item.image ||
-                "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=200&fit=crop",
+              uri: item.image,
             }}
             style={styles.eventImage}
             resizeMode="cover"
