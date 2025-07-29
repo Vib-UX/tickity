@@ -2,11 +2,11 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/TickityNFT.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityMarketplace.sol";
-import "../src/TickityPOAP.sol";
-import "../src/Event.sol";
+import "../../src/TickityNFT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/TickityMarketplace.sol";
+import "../../src/POAP.sol";
+import "../../src/Event.sol";
 
 /**
  * @title DeployWithPOAP
@@ -28,9 +28,9 @@ contract DeployWithPOAP is Script {
         TickityNFT nftContract = new TickityNFT();
         console.log("TickityNFT deployed at:", address(nftContract));
 
-        // Deploy TickityPOAP contract
-        TickityPOAP poapContract = new TickityPOAP();
-        console.log("TickityPOAP deployed at:", address(poapContract));
+        // Deploy POAP contract
+        POAP poapContract = new POAP();
+        console.log("POAP deployed at:", address(poapContract));
 
         // Deploy EventFactory contract with POAP integration
         EventFactory factory = new EventFactory(usdtContract, address(poapContract));
@@ -58,13 +58,13 @@ contract DeployWithPOAP is Script {
         console.log("All contracts deployed and test events created with POAP integration.");
     }
 
-    function createTestEventsWithPOAP(EventFactory factory, TickityNFT nftContract, TickityPOAP poapContract) internal {
+    function createTestEventsWithPOAP(EventFactory factory, TickityNFT nftContract, POAP poapContract) internal {
         createMusicEventWithPOAP(factory, nftContract, poapContract);
         createTechEventWithPOAP(factory, nftContract, poapContract);
         createSportsEventWithPOAP(factory, nftContract, poapContract);
     }
 
-    function createMusicEventWithPOAP(EventFactory factory, TickityNFT nftContract, TickityPOAP poapContract) internal {
+    function createMusicEventWithPOAP(EventFactory factory, TickityNFT nftContract, POAP poapContract) internal {
         string[] memory ticketTypes = new string[](2);
         ticketTypes[0] = "VIP Pass";
         ticketTypes[1] = "General Admission";
@@ -95,7 +95,7 @@ contract DeployWithPOAP is Script {
         console.log("  - POAP integration: Enabled");
     }
 
-    function createTechEventWithPOAP(EventFactory factory, TickityNFT nftContract, TickityPOAP poapContract) internal {
+    function createTechEventWithPOAP(EventFactory factory, TickityNFT nftContract, POAP poapContract) internal {
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Developer Pass";
         
@@ -122,7 +122,7 @@ contract DeployWithPOAP is Script {
         console.log("  - POAP integration: Enabled");
     }
 
-    function createSportsEventWithPOAP(EventFactory factory, TickityNFT nftContract, TickityPOAP poapContract) internal {
+    function createSportsEventWithPOAP(EventFactory factory, TickityNFT nftContract, POAP poapContract) internal {
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Championship Pass";
         

@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/Event.sol";
-import "../src/TickityPOAP.sol";
+import "../../src/Event.sol";
+import "../../src/POAP.sol";
 
 /**
  * @title FinalPOAPTest
@@ -21,7 +21,7 @@ contract FinalPOAPTest is Script {
         console.log("====================================");
         console.log("");
 
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
         address user = msg.sender;
 
         console.log("User Address:", user);

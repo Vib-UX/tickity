@@ -2,11 +2,11 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/TickityNFT.sol";
-import "../src/TickityPOAP.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityMarketplace.sol";
-import "../src/IUSDT.sol";
+import "../../src/TickityNFT.sol";
+import "../../src/POAP.sol";
+import "../../src/EventFactory.sol";
+import "../../src/TickityMarketplace.sol";
+import "../../src/IUSDT.sol";
 
 contract DeployFixedContracts is Script {
     address constant USDT_CONTRACT = 0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B;
@@ -23,8 +23,8 @@ contract DeployFixedContracts is Script {
         TickityNFT nftContract = new TickityNFT();
         console.log("TickityNFT deployed at:", address(nftContract));
         
-        TickityPOAP poapContract = new TickityPOAP();
-        console.log("TickityPOAP deployed at:", address(poapContract));
+        POAP poapContract = new POAP();
+        console.log("POAP deployed at:", address(poapContract));
         
         EventFactory factory = new EventFactory(USDT_CONTRACT, address(poapContract));
         console.log("EventFactory deployed at:", address(factory));
@@ -55,7 +55,7 @@ contract DeployFixedContracts is Script {
     function createTestEventWithDebugging(
         EventFactory factory, 
         TickityNFT nftContract, 
-        TickityPOAP poapContract
+        POAP poapContract
     ) internal {
         string[] memory ticketTypes = new string[](1);
         ticketTypes[0] = "Debug Test Ticket";

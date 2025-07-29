@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/Event.sol";
-import "../src/TickityPOAP.sol";
-import "../src/IUSDT.sol";
+import "../../src/Event.sol";
+import "../../src/POAP.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title TestFreshEventPOAP
@@ -29,7 +29,7 @@ contract TestFreshEventPOAP is Script {
         address freshEventAddress = 0x8E5DB588A737F937E95386F2d85DBEe4F749D831;
         
         Event freshEvent = Event(payable(freshEventAddress));
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
         IUSDT usdt = IUSDT(USDT_CONTRACT);
 
         console.log("Fresh Event Address:", freshEventAddress);

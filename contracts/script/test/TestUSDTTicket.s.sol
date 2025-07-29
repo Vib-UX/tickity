@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/IUSDT.sol";
-import "../src/Event.sol";
-import "../src/TickityMarketplace.sol";
+import "../../src/IUSDT.sol";
+import "../../src/Event.sol";
+import "../../src/TickityMarketplace.sol";
 
 /**
  * @title TestUSDTTicketPurchase

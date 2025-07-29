@@ -2,11 +2,11 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/Event.sol";
-import "../src/TickityNFT.sol";
-import "../src/TickityPOAP.sol";
-import "../src/IUSDT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/Event.sol";
+import "../../src/TickityNFT.sol";
+import "../../src/POAP.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title TestPOAPIntegration
@@ -60,7 +60,7 @@ contract TestPOAPIntegration is Script {
 
         // Create POAP event for this new event
         console.log("Creating POAP Event for Integration Test...");
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
         
         uint256 poapEventId = poapContract.createPOAPEvent(
             4, // eventId (assuming this is the next event)

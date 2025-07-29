@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityPOAP.sol";
-import "../src/IUSDT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/POAP.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title CreateNewPOAPEvent
@@ -26,7 +26,7 @@ contract CreateNewPOAPEvent is Script {
         console.log("");
 
         EventFactory factory = EventFactory(EVENT_FACTORY);
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
         IUSDT usdt = IUSDT(USDT_CONTRACT);
 
         console.log("Event Factory Address:", EVENT_FACTORY);

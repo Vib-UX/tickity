@@ -2,10 +2,10 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityNFT.sol";
-import "../src/TickityPOAP.sol";
-import "../src/IUSDT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/TickityNFT.sol";
+import "../../src/POAP.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title DeployUpdatedContracts
@@ -26,10 +26,10 @@ contract DeployUpdatedContracts is Script {
         console.log("TickityNFT deployed at:", address(nftContract));
         console.log("");
 
-        // Step 2: Deploy TickityPOAP (with multiple POAPs feature)
-        console.log("Step 2: Deploying TickityPOAP (Updated)...");
-        TickityPOAP poapContract = new TickityPOAP();
-        console.log("TickityPOAP deployed at:", address(poapContract));
+        // Step 2: Deploy POAP (with multiple POAPs feature)
+        console.log("Step 2: Deploying POAP (Updated)...");
+        POAP poapContract = new POAP();
+        console.log("POAP deployed at:", address(poapContract));
         console.log("");
 
         // Step 3: Deploy EventFactory
@@ -60,7 +60,7 @@ contract DeployUpdatedContracts is Script {
         console.log("===================");
         console.log("Contract Addresses:");
         console.log("- TickityNFT:", address(nftContract));
-        console.log("- TickityPOAP:", address(poapContract));
+        console.log("- POAP:", address(poapContract));
         console.log("- EventFactory:", address(factory));
         console.log("");
         console.log("Features:");

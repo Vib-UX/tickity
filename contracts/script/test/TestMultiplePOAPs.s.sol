@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/Event.sol";
-import "../src/TickityPOAP.sol";
-import "../src/IUSDT.sol";
+import "../../src/Event.sol";
+import "../../src/POAP.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title TestSimpleMultiplePOAPs
@@ -29,7 +29,7 @@ contract TestSimpleMultiplePOAPs is Script {
         address eventAddress = 0x0ba78eD63B6478273Bb2E01DAB695aDA325Ae2Eb;
         
         Event testEvent = Event(payable(eventAddress));
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
         IUSDT usdt = IUSDT(USDT_CONTRACT);
         address user = vm.addr(deployerPrivateKey);
 

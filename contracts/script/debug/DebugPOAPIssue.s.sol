@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/Event.sol";
-import "../src/TickityPOAP.sol";
+import "../../src/Event.sol";
+import "../../src/POAP.sol";
 
 /**
  * @title DebugPOAPIssue
@@ -25,7 +25,7 @@ contract DebugPOAPIssue is Script {
         address eventAddress = 0x4e373bb270A9c5f79E2149075D23456C013fEb22;
         
         Event testEvent = Event(payable(eventAddress));
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
 
         console.log("Event Address:", eventAddress);
         console.log("Event Name:", testEvent.name());

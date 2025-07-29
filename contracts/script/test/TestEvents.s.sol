@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityMarketplace.sol";
-import "../src/TickityNFT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/TickityMarketplace.sol";
+import "../../src/TickityNFT.sol";
 
 /**
  * @title TestEvents

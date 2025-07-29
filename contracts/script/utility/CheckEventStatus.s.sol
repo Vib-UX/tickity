@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/TickityPOAP.sol";
+import "../../src/EventFactory.sol";
+import "../../src/POAP.sol";
 
 /**
  * @title CheckEventStatus
@@ -20,7 +20,7 @@ contract CheckEventStatus is Script {
         console.log("");
 
         EventFactory factory = EventFactory(EVENT_FACTORY);
-        TickityPOAP poapContract = TickityPOAP(TICKITY_POAP);
+        POAP poapContract = POAP(TICKITY_POAP);
 
         console.log("Factory Address:", EVENT_FACTORY);
         console.log("POAP Contract:", TICKITY_POAP);

@@ -2,10 +2,10 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
-import "../src/EventFactory.sol";
-import "../src/POAP.sol";
-import "../src/Event.sol";
-import "../src/IUSDT.sol";
+import "../../src/EventFactory.sol";
+import "../../src/POAP.sol";
+import "../../src/Event.sol";
+import "../../src/IUSDT.sol";
 
 /**
  * @title TestSimplePOAP
