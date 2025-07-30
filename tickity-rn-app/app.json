@@ -19,9 +19,7 @@
         "NSCameraUsageDescription": "This app uses the camera for AR experiences.",
         "ARKit": true
       },
-      "capabilities": [
-        "ARKit"
-      ]
+      "capabilities": ["ARKit"]
     },
     "android": {
       "adaptiveIcon": {
@@ -37,9 +35,7 @@
       "intentFilters": [
         {
           "action": "android.intent.action.MAIN",
-          "category": [
-            "android.intent.category.LAUNCHER"
-          ]
+          "category": ["android.intent.category.LAUNCHER"]
         }
       ]
     },
@@ -63,6 +59,12 @@
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for AR experiences."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
         }
       ]
     ],
