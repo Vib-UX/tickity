@@ -7,12 +7,17 @@ import {
 } from "react-native";
 import { createAuth } from "thirdweb/auth";
 import { etherlink } from "thirdweb/chains";
-import { ConnectButton, ConnectEmbed, useActiveAccount } from "thirdweb/react";
+import {
+  ConnectButton,
+  ConnectEmbed,
+  useActiveAccount,
+  useAutoConnect,
+} from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { inAppWallet } from "thirdweb/wallets/in-app";
 import { chain, client } from "../constants/thirdweb";
 
-const wallets = [
+export const wallets = [
   inAppWallet({
     auth: {
       options: ["google", "facebook", "discord", "telegram", "email", "phone"],
@@ -33,16 +38,17 @@ const wallets = [
   createWallet("io.zerion.wallet"),
 ];
 
-const thirdwebAuth = createAuth({
+export const thirdwebAuth = createAuth({
   domain: "localhost:3000",
   client,
 });
 
 // fake login state, this should be returned from the backend
-let isLoggedIn = false;
+let isLoggedIn = true;
 
 export default function ThirdwebScreen() {
   const account = useActiveAccount();
+
   const theme = useColorScheme();
   return (
     <ScrollView>

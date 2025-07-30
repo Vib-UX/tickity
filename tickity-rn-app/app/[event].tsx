@@ -157,32 +157,52 @@ const EventPage = () => {
       setShowNFTModal(true);
       refetchUserTickets();
     } catch (error) {
-      const logs = await getContractEvents({
-        contract: eventContract,
-        events: [
-          {
-            // @ts-ignore
-            name: "TicketPurchased",
-            inputs: [
-              {
-                name: "buyer",
-                type: "address",
-              },
-            ],
+      console.log("error", error);
+
+      // Only execute the fallback logic if the error contains the specific message
+      if (
+        error instanceof Error &&
+        error.message.includes("Failed to get user operation receipt")
+      ) {
+        setCurrentStep("Fetching user operations...");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const logs = await getContractEvents({
+          contract: eventContract,
+          events: [
+            {
+              // @ts-ignore
+              name: "TicketPurchased",
+              inputs: [
+                {
+                  name: "buyer",
+                  type: "address",
+                },
+              ],
+            },
+          ],
+          queryFilter: {
+            fromBlock: "earliest",
+            toBlock: "latest",
           },
-        ],
-      });
-      const tx = logs[logs.length - 1];
-      if (tx.transactionHash) {
-        setTransactionHash(tx.transactionHash);
-        setCurrentStep("Finalizing your NFT tickets...");
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        setPurchaseState("success");
-        setPurchaseError("");
-        setShowNFTModal(true);
-        refetchUserTickets();
-        return;
+        });
+        const latestLog = logs[0].transactionHash;
+        const tx = logs[logs.length - 1];
+        console.log({
+          latestLog,
+          tx: tx.transactionHash,
+        });
+        if (tx.transactionHash) {
+          setTransactionHash(tx.transactionHash);
+          setCurrentStep("Finalizing your NFT tickets...");
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          setPurchaseState("success");
+          setPurchaseError("");
+          setShowNFTModal(true);
+          refetchUserTickets();
+          return;
+        }
       }
+
       setPurchaseError(
         error instanceof Error ? error.message : "An unexpected error occurred"
       );
@@ -225,6 +245,7 @@ const EventPage = () => {
     setShowNFTModal(false);
     setPurchaseState("idle");
     setPurchaseError("");
+    setTransactionHash("");
   };
 
   const formatDate = (dateString?: string) => {
