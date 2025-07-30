@@ -13,7 +13,6 @@ import { useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   ScrollView,
   StyleSheet,
@@ -27,14 +26,12 @@ import { approve } from "thirdweb/extensions/erc20";
 import { useActiveAccount, useSendCalls } from "thirdweb/react";
 import { formatNumber } from "thirdweb/utils";
 
-const { width, height } = Dimensions.get("window");
-
 // Define purchase states
 type PurchaseState = "idle" | "loading" | "success" | "error";
 
 const EventPage = () => {
   const params = useLocalSearchParams();
-  const eventId = params.event as string;
+  const eventId = params.yourevent as string;
   const navigation = useNavigation();
   const account = useActiveAccount();
   const { data, isLoading, error } = useGetEvents();
