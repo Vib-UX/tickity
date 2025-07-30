@@ -18,6 +18,7 @@ const { width, height } = Dimensions.get("window");
 interface NFTModalProps {
   visible: boolean;
   onClose: () => void;
+  onDone?: () => void;
   nftImage?: string;
   eventName?: string;
   ticketQuantity: number;
@@ -28,6 +29,7 @@ interface NFTModalProps {
 function NFTModal({
   visible,
   onClose,
+  onDone,
   nftImage,
   eventName,
   ticketQuantity,
@@ -166,7 +168,11 @@ function NFTModal({
                 if (onRefetch) {
                   onRefetch();
                 }
-                onClose();
+                if (onDone) {
+                  onDone();
+                } else {
+                  onClose();
+                }
               }}
             >
               <LinearGradient

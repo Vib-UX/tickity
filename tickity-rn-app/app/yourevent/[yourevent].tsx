@@ -2,11 +2,7 @@ import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModal from "@/components/NFTModal";
-import TransactionProgress from "@/components/TransactionProgress";
-import { chain, client, usdcContract } from "@/constants/thirdweb";
-import useGetEvents from "@/hooks/useGetEvents";
-import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
-import useGetUserTickets from "@/hooks/useGetUserTickets";
+import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation } from "expo-router";
@@ -21,229 +17,47 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getContract, getContractEvents, prepareContractCall } from "thirdweb";
-import { approve } from "thirdweb/extensions/erc20";
-import { useActiveAccount, useSendCalls } from "thirdweb/react";
-import { formatNumber } from "thirdweb/utils";
+import { useActiveAccount } from "thirdweb/react";
 
-// Define purchase states
-type PurchaseState = "idle" | "loading" | "success" | "error";
+// Define checkout states
+type CheckoutState = "initial" | "verifying" | "stepper" | "completed";
+type StepperStep = "email" | "location" | "selfie" | "ready";
 
-const EventPage = () => {
+const YourEventPage = () => {
   const params = useLocalSearchParams();
   const eventId = params.yourevent as string;
   const navigation = useNavigation();
   const account = useActiveAccount();
-  const { data, isLoading, error } = useGetEvents();
+  const { data, isLoading, error } = useGetUserEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
 
-  const id = eventId.split("-")[0];
-
-  const eventContract = getContract({
-    client,
-    address: id,
-    chain: chain,
-  });
-
-  const {
-    balance: usdtBalance,
-    isLoading: isLoadingBalance,
-    refetch: refetchUSDTBalance,
-  } = useGetUSDTBalance();
-
-  // Get user tickets for this event
-
-  // Purchase state management
-  const [purchaseState, setPurchaseState] = useState<PurchaseState>("idle");
-  const [purchaseError, setPurchaseError] = useState<string>("");
-  const [currentStep, setCurrentStep] = useState<string>("");
-
-  // NFT Modal state
+  // State management
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>("initial");
+  const [currentStepperStep, setCurrentStepperStep] =
+    useState<StepperStep>("email");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [locationVerified, setLocationVerified] = useState(false);
+  const [selfieTaken, setSelfieTaken] = useState(false);
+  const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [showNFTModal, setShowNFTModal] = useState(false);
-  const [transactionHash, setTransactionHash] = useState<string>("");
-
-  // Ticket quantity state
-  const [ticketQuantity, setTicketQuantity] = useState(1);
-  const [selectedTicketType, setSelectedTicketType] = useState<string>("");
+  const [showSuccessUI, setShowSuccessUI] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState("");
 
   const event = useMemo(() => {
     if (!data || !eventId) return null;
-    const events = data.eventCreateds;
-    if (!events || !Array.isArray(events)) return null;
-    return events.find(
-      (event: Event) => event.eventAddress === eventId
-    ) as Event;
+    const events = (data as any)?.events || [];
+    const eventWithTickets = events.find(
+      (item: any) => item.event.eventAddress === eventId
+    );
+    return eventWithTickets?.event as Event;
   }, [data, eventId]);
-
-  const { mutateAsync: sendCalls } = useSendCalls();
-
-  const {
-    hasTickets,
-    ticketCount,
-    ticketsByType,
-    isLoading: isLoadingTickets,
-    refetch: refetchUserTickets,
-  } = useGetUserTickets(event?.eventAddress);
-
-  useLayoutEffect(() => {
-    if (
-      event?.ticketTypes &&
-      event.ticketTypes.length > 0 &&
-      !selectedTicketType
-    ) {
-      setSelectedTicketType(event.ticketTypes[0]);
-    }
-  }, [event, selectedTicketType]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
       title: event?.name || `Event #${eventId?.slice(-6) || "N/A"}`,
     });
   }, [navigation, eventId, event]);
-
-  // Handle quantity changes
-  const incrementQuantity = () => {
-    setTicketQuantity((prev) => Math.min(prev + 1, 10)); // Max 10 tickets
-  };
-
-  const decrementQuantity = () => {
-    setTicketQuantity((prev) => Math.max(prev - 1, 1)); // Min 1 ticket
-  };
-
-  const selectedTicketIndex =
-    event?.ticketTypes?.findIndex((type) => type === selectedTicketType) ?? 0;
-  const selectedTicketPrice = event?.ticketPrices?.[selectedTicketIndex]
-    ? BigInt(event.ticketPrices[selectedTicketIndex])
-    : 0n;
-
-  const totalPrice = selectedTicketPrice * BigInt(ticketQuantity);
-
-  const purchaseTicket = async () => {
-    try {
-      setTransactionHash("");
-      setPurchaseState("loading");
-      setPurchaseError("");
-      setCurrentStep("Preparing transaction...");
-
-      if (!event) {
-        throw new Error("Event not found");
-      }
-
-      const approveAmount = selectedTicketPrice * BigInt(ticketQuantity);
-
-      const sendTx1 = approve({
-        contract: usdcContract,
-        amount: formatNumber(Number(approveAmount), 6),
-        spender: eventContract.address,
-      });
-
-      const sendTx2 = prepareContractCall({
-        contract: eventContract,
-        method:
-          "function purchaseTicket(uint256 ticketTypeIndex) external payable",
-        params: [BigInt(selectedTicketIndex)],
-      });
-      await sendCalls({
-        calls: [sendTx1, sendTx2],
-      });
-      refetchUSDTBalance();
-      setCurrentStep("Finalizing your NFT tickets...");
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setPurchaseState("success");
-      setPurchaseError("");
-      setShowNFTModal(true);
-      refetchUserTickets();
-    } catch (error) {
-      console.log("error", error);
-
-      // Only execute the fallback logic if the error contains the specific message
-      if (
-        error instanceof Error &&
-        error.message.includes("Failed to get user operation receipt")
-      ) {
-        setCurrentStep("Fetching user operations...");
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const logs = await getContractEvents({
-          contract: eventContract,
-          events: [
-            {
-              // @ts-ignore
-              name: "TicketPurchased",
-              inputs: [
-                {
-                  name: "buyer",
-                  type: "address",
-                },
-              ],
-            },
-          ],
-          queryFilter: {
-            fromBlock: "earliest",
-            toBlock: "latest",
-          },
-        });
-        const latestLog = logs[0].transactionHash;
-        const tx = logs[logs.length - 1];
-        console.log({
-          latestLog,
-          tx: tx.transactionHash,
-        });
-        if (tx.transactionHash) {
-          setTransactionHash(tx.transactionHash);
-          setCurrentStep("Finalizing your NFT tickets...");
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          setPurchaseState("success");
-          setPurchaseError("");
-          setShowNFTModal(true);
-          refetchUserTickets();
-          return;
-        }
-      }
-
-      setPurchaseError(
-        error instanceof Error ? error.message : "An unexpected error occurred"
-      );
-      setTimeout(() => {
-        setPurchaseState("idle");
-        setPurchaseError("");
-        setCurrentStep("");
-      }, 5000);
-    }
-  };
-
-  const handleBuyTicket = async () => {
-    if (!account) {
-      signInBottomSheetRef.current?.snapToIndex(0);
-      console.log("Please connect your wallet first");
-      return;
-    }
-
-    // Check if user has enough USDT balance
-    if (usdtBalance < totalPrice) {
-      setPurchaseState("error");
-      setPurchaseError(
-        "Insufficient USDT balance. Please get more USDT to purchase tickets."
-      );
-      setTimeout(() => {
-        setPurchaseState("idle");
-        setPurchaseError("");
-      }, 5000);
-      return;
-    }
-
-    if (purchaseState === "loading") {
-      return; // Prevent multiple clicks
-    }
-
-    await purchaseTicket();
-  };
-
-  const handleCloseNFTModal = () => {
-    setShowNFTModal(false);
-    setPurchaseState("idle");
-    setPurchaseError("");
-    setTransactionHash("");
-  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "Coming Soon";
@@ -260,10 +74,55 @@ const EventPage = () => {
     }
   };
 
-  const formatPrice = (price?: string | bigint) => {
-    if (!price || price === BigInt(0)) return "Free";
-    const usdtPrice = parseFloat(price.toString()) / Math.pow(10, 6);
-    return `${usdtPrice.toFixed(2)} USDT`;
+  const handleVerifyEvent = async () => {
+    if (!account) {
+      signInBottomSheetRef.current?.snapToIndex(0);
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerificationError("");
+
+    try {
+      // Simulate event verification
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      setCheckoutState("stepper");
+    } catch (error) {
+      setVerificationError("Failed to verify event. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleEmailVerification = () => {
+    // Simulate email verification
+    setEmailVerified(true);
+    setCurrentStepperStep("location");
+  };
+
+  const handleLocationCheck = () => {
+    // Simulate location verification
+    setLocationVerified(true);
+    setCurrentStepperStep("selfie");
+  };
+
+  const handleSelfieCapture = () => {
+    // Simulate selfie capture
+    setSelfieTaken(true);
+    setSelfieImage(
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop"
+    );
+    setCurrentStepperStep("ready");
+  };
+
+  const handleCompleteCheckout = () => {
+    setShowNFTModal(true);
+  };
+
+  const handleCloseNFTModal = () => {
+    setShowNFTModal(false);
+    setShowSuccessUI(true);
   };
 
   if (isLoading) {
@@ -292,7 +151,8 @@ const EventPage = () => {
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>Event not found</Text>
             <Text style={styles.errorSubtext}>
-              The event you're looking for doesn't exist or has been removed.
+              The event you're looking for doesn't exist or you don't have
+              tickets for it.
             </Text>
           </View>
         </LinearGradient>
@@ -314,9 +174,9 @@ const EventPage = () => {
           onClose={handleCloseNFTModal}
           nftImage={event?.image}
           eventName={event?.name}
-          ticketQuantity={ticketQuantity}
-          transactionHash={transactionHash}
-          onRefetch={refetchUserTickets}
+          ticketQuantity={1}
+          transactionHash=""
+          onRefetch={() => {}}
         />
 
         <ScrollView
@@ -345,314 +205,15 @@ const EventPage = () => {
           <View style={styles.content}>
             {/* Event Title */}
             <View style={styles.eventHeader}>
-              <Text style={styles.eventTitle}>
+              <Text style={styles.eventTitle} numberOfLines={2}>
                 {event.name || `Event #${event.id.slice(-6)}`}
               </Text>
               <View style={styles.eventBadge}>
-                <Text style={styles.eventBadgeText}>Live Event</Text>
+                <Text style={styles.eventBadgeText}>Your Event</Text>
               </View>
             </View>
 
-            {/* USDT Balance Display - Only show if user hasn't purchased tickets */}
-            {!hasTickets && (
-              <View style={styles.balanceContainer}>
-                <View style={styles.balanceIconContainer}>
-                  <Text style={styles.balanceIcon}>💰</Text>
-                </View>
-                <View style={styles.balanceContent}>
-                  <Text style={styles.balanceLabel}>Your USDT Balance</Text>
-                  <Text style={styles.balanceValue}>
-                    {!account
-                      ? "Connect wallet to view balance"
-                      : isLoadingBalance
-                      ? "Loading..."
-                      : `${
-                          parseFloat(usdtBalance.toString()) / Math.pow(10, 6)
-                        } USDT`}
-                  </Text>
-                </View>
-                {account ? (
-                  <TouchableOpacity style={styles.getUsdtButton}>
-                    <Text style={styles.getUsdtButtonText}>Get USDT</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.connectWalletButton}
-                    onPress={() => signInBottomSheetRef.current?.snapToIndex(0)}
-                  >
-                    <Text style={styles.connectWalletButtonText}>
-                      Connect Wallet
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* 3. Ticket Types Section - Only show if user hasn't purchased tickets */}
-            {!hasTickets &&
-              event.ticketTypes &&
-              event.ticketTypes.length > 0 && (
-                <View style={styles.ticketTypesCard}>
-                  <View style={styles.ticketTypesHeader}>
-                    <Text style={styles.ticketTypesTitle}>🎫 Ticket Types</Text>
-                    <Text style={styles.ticketTypesSubtitle}>
-                      Select your preferred ticket type
-                    </Text>
-                  </View>
-
-                  <View style={styles.ticketTypesContent}>
-                    {event.ticketTypes.map((ticketType, index) => {
-                      const price = event.ticketPrices?.[index] || "0";
-                      const quantity = event.ticketQuantities?.[index] || "0";
-                      const isSelected = selectedTicketType === ticketType;
-
-                      return (
-                        <TouchableOpacity
-                          key={ticketType}
-                          style={[
-                            styles.ticketTypeOption,
-                            isSelected && styles.ticketTypeOptionSelected,
-                          ]}
-                          onPress={() => setSelectedTicketType(ticketType)}
-                        >
-                          <View style={styles.ticketTypeContent}>
-                            <View style={styles.ticketTypeHeader}>
-                              <Text
-                                style={[
-                                  styles.ticketTypeName,
-                                  isSelected && styles.ticketTypeNameSelected,
-                                ]}
-                              >
-                                {ticketType}
-                              </Text>
-                              {isSelected && (
-                                <View style={styles.selectedIndicator}>
-                                  <Text style={styles.selectedIndicatorText}>
-                                    ✓
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <View style={styles.ticketTypeDetails}>
-                              <Text
-                                style={[
-                                  styles.ticketTypePrice,
-                                  isSelected && styles.ticketTypePriceSelected,
-                                ]}
-                              >
-                                {formatPrice(BigInt(price))}
-                              </Text>
-                              {parseInt(quantity) > 0 && (
-                                <Text
-                                  style={[
-                                    styles.ticketTypeQuantity,
-                                    isSelected &&
-                                      styles.ticketTypeQuantitySelected,
-                                  ]}
-                                >
-                                  {quantity} available
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-
-            {/* 4. User Tickets Status */}
-            {account && (isLoadingTickets || hasTickets) && (
-              <View style={styles.userTicketsCard}>
-                {isLoadingTickets ? (
-                  <View style={styles.loadingTicketsContainer}>
-                    <ActivityIndicator size="small" color="#22c55e" />
-                    <Text style={styles.loadingTicketsText}>
-                      Checking your tickets...
-                    </Text>
-                  </View>
-                ) : hasTickets ? (
-                  <View style={styles.myTicketsContainer}>
-                    <View style={styles.myTicketsHeader}>
-                      <Text style={styles.myTicketsIcon}>🎫</Text>
-                      <Text style={styles.myTicketsTitle}>My Tickets</Text>
-                    </View>
-
-                    <View style={styles.myTicketsContent}>
-                      <View style={styles.myTicketsInfo}>
-                        <Text style={styles.myTicketsCount}>
-                          {ticketCount} Ticket{ticketCount > 1 ? "s" : ""}
-                        </Text>
-                        <Text style={styles.myTicketsStatus}>✓ Confirmed</Text>
-                      </View>
-
-                      <View style={styles.myTicketsDetails}>
-                        <View style={styles.myTicketsDetail}>
-                          <Text style={styles.myTicketsDetailLabel}>Event</Text>
-                          <Text style={styles.myTicketsDetailValue}>
-                            {event?.name || "Event"}
-                          </Text>
-                        </View>
-
-                        <View style={styles.myTicketsDetail}>
-                          <Text style={styles.myTicketsDetailLabel}>
-                            Status
-                          </Text>
-                          <Text style={styles.myTicketsDetailValue}>
-                            Active
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Ticket Types Breakdown */}
-                      {Object.keys(ticketsByType).length > 0 && (
-                        <View style={styles.ticketTypesBreakdown}>
-                          <Text style={styles.ticketTypesBreakdownTitle}>
-                            Your Ticket Types
-                          </Text>
-                          {Object.entries(ticketsByType).map(
-                            ([typeIndex, tickets]) => {
-                              const typeIndexNum = parseInt(typeIndex);
-                              const ticketTypes = event?.ticketTypes || [];
-                              const ticketPrices = event?.ticketPrices || [];
-
-                              // Validate that the type index is within bounds
-                              const isValidTypeIndex =
-                                typeIndexNum >= 0 &&
-                                typeIndexNum < ticketTypes.length;
-
-                              const ticketTypeName = isValidTypeIndex
-                                ? ticketTypes[typeIndexNum]
-                                : `Type ${typeIndexNum + 1}`;
-
-                              const ticketPrice =
-                                isValidTypeIndex && ticketPrices[typeIndexNum]
-                                  ? formatPrice(
-                                      BigInt(ticketPrices[typeIndexNum])
-                                    )
-                                  : "Free";
-
-                              return (
-                                <View
-                                  key={typeIndex}
-                                  style={styles.ticketTypeItem}
-                                >
-                                  <View style={styles.ticketTypeItemHeader}>
-                                    <Text style={styles.ticketTypeItemName}>
-                                      {ticketTypeName}
-                                    </Text>
-                                    <Text style={styles.ticketTypeItemCount}>
-                                      {tickets.length}{" "}
-                                      {tickets.length === 1
-                                        ? "ticket"
-                                        : "tickets"}
-                                    </Text>
-                                  </View>
-                                  <View style={styles.ticketTypeItemDetails}>
-                                    <Text style={styles.ticketTypeItemPrice}>
-                                      {ticketPrice}
-                                    </Text>
-                                    <Text style={styles.ticketTypeItemIds}>
-                                      IDs:{" "}
-                                      {tickets
-                                        .map((t) => t.ticketId.slice(-4))
-                                        .join(", ")}
-                                    </Text>
-                                  </View>
-                                </View>
-                              );
-                            }
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            )}
-
-            {/* 5. Buy Tickets Section - Only show if user hasn't purchased tickets */}
-            {!hasTickets && (
-              <View style={styles.ticketSelectionCard}>
-                <View style={styles.ticketSelectionHeader}>
-                  <Text style={styles.ticketSelectionTitle}>
-                    🎫 Buy Tickets
-                  </Text>
-                  <Text style={styles.ticketSelectionSubtitle}>
-                    Choose how many tickets you'd like to purchase
-                  </Text>
-                </View>
-
-                <View style={styles.ticketSelectionContent}>
-                  <View style={styles.quantitySelector}>
-                    <TouchableOpacity
-                      style={[
-                        styles.quantityButton,
-                        ticketQuantity <= 1 && styles.quantityButtonDisabled,
-                      ]}
-                      onPress={decrementQuantity}
-                      disabled={ticketQuantity <= 1}
-                    >
-                      <Text
-                        style={[
-                          styles.quantityButtonText,
-                          ticketQuantity <= 1 &&
-                            styles.quantityButtonTextDisabled,
-                        ]}
-                      >
-                        −
-                      </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.quantityDisplay}>
-                      <Text style={styles.quantityNumber}>
-                        {ticketQuantity}
-                      </Text>
-                      <Text style={styles.quantityLabel}>tickets</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.quantityButton,
-                        ticketQuantity >= 10 && styles.quantityButtonDisabled,
-                      ]}
-                      onPress={incrementQuantity}
-                      disabled={ticketQuantity >= 10}
-                    >
-                      <Text
-                        style={[
-                          styles.quantityButtonText,
-                          ticketQuantity >= 10 &&
-                            styles.quantityButtonTextDisabled,
-                        ]}
-                      >
-                        +
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.priceDisplay}>
-                    <Text style={styles.priceLabel}>Total Price</Text>
-                    <Text style={styles.priceValue}>
-                      {formatPrice(totalPrice)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* 1. About Section */}
-            <View style={styles.descriptionCard}>
-              <Text style={styles.descriptionLabel}>About This Event</Text>
-              <Text style={styles.eventDescription}>
-                {event.description ||
-                  "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
-              </Text>
-            </View>
-
-            {/* 2. Event Details Section */}
+            {/* Event Details */}
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Event Details</Text>
 
@@ -680,134 +241,285 @@ const EventPage = () => {
                 </View>
               </View>
 
-              <View style={styles.detailsRow}>
-                <View style={styles.detailCard}>
-                  <View style={styles.detailIconContainer}>
-                    <Text style={styles.detailIcon}>💰</Text>
-                  </View>
-                  <View style={styles.detailContent}>
-                    <Text style={styles.detailLabel}>Ticket Price</Text>
-                    <Text style={styles.detailValue}>
-                      {formatPrice(selectedTicketPrice)}
-                    </Text>
-                  </View>
+              <View style={styles.detailCard}>
+                <View style={styles.detailIconContainer}>
+                  <Text style={styles.detailIcon}>🎫</Text>
                 </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Your Tickets</Text>
+                  <Text style={styles.detailValue}>1 Ticket Confirmed</Text>
+                </View>
+              </View>
+            </View>
 
-                <View style={styles.detailCard}>
-                  <View style={styles.detailIconContainer}>
-                    <Text style={styles.detailIcon}>🎫</Text>
+            {/* Stepper - Only show after verification starts */}
+            {checkoutState !== "initial" && (
+              <View style={styles.stepperSection}>
+                <Text style={styles.stepperTitle}>Checkout Process</Text>
+                <Text style={styles.stepperSubtitle}>
+                  Complete these steps to checkout at the event
+                </Text>
+
+                <View style={styles.stepperContainer}>
+                  {/* Email Verification Step */}
+                  <View style={styles.stepContainer}>
+                    <View
+                      style={[
+                        styles.stepIcon,
+                        currentStepperStep === "email" && styles.stepIconActive,
+                        emailVerified && styles.stepIconCompleted,
+                      ]}
+                    >
+                      <Text style={styles.stepNumber}>1</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>Email Verification</Text>
+                      <Text style={styles.stepDescription}>
+                        Verify your email address for event notifications
+                      </Text>
+                      {currentStepperStep === "email" && !emailVerified && (
+                        <TouchableOpacity
+                          style={styles.stepButton}
+                          onPress={handleEmailVerification}
+                        >
+                          <Text style={styles.stepButtonText}>
+                            Verify Email
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {emailVerified && (
+                        <Text style={styles.stepCompleted}>✓ Verified</Text>
+                      )}
+                    </View>
                   </View>
-                  <View style={styles.detailContent}>
-                    <Text style={styles.detailLabel}>Available</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedTicketType
-                        ? event?.ticketQuantities?.[selectedTicketIndex] || "0"
-                        : event?.ticketQuantities?.[0] || "Unlimited"}
-                    </Text>
+
+                  {/* Location Check Step */}
+                  <View style={styles.stepContainer}>
+                    <View
+                      style={[
+                        styles.stepIcon,
+                        currentStepperStep === "location" &&
+                          styles.stepIconActive,
+                        locationVerified && styles.stepIconCompleted,
+                      ]}
+                    >
+                      <Text style={styles.stepNumber}>2</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>
+                        Location Verification
+                      </Text>
+                      <Text style={styles.stepDescription}>
+                        You need to be within 100m of the event location
+                      </Text>
+                      {currentStepperStep === "location" &&
+                        !locationVerified && (
+                          <TouchableOpacity
+                            style={styles.stepButton}
+                            onPress={handleLocationCheck}
+                          >
+                            <Text style={styles.stepButtonText}>
+                              Check Location
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      {locationVerified && (
+                        <Text style={styles.stepCompleted}>
+                          ✓ Location Verified
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Selfie Step */}
+                  <View style={styles.stepContainer}>
+                    <View
+                      style={[
+                        styles.stepIcon,
+                        currentStepperStep === "selfie" &&
+                          styles.stepIconActive,
+                        selfieTaken && styles.stepIconCompleted,
+                      ]}
+                    >
+                      <Text style={styles.stepNumber}>3</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>Take Selfie</Text>
+                      <Text style={styles.stepDescription}>
+                        Take a selfie to verify your identity at the event
+                      </Text>
+                      {currentStepperStep === "selfie" && !selfieTaken && (
+                        <TouchableOpacity
+                          style={styles.stepButton}
+                          onPress={handleSelfieCapture}
+                        >
+                          <Text style={styles.stepButtonText}>Take Selfie</Text>
+                        </TouchableOpacity>
+                      )}
+                      {selfieTaken && selfieImage && (
+                        <View style={styles.selfieContainer}>
+                          <Image
+                            source={{ uri: selfieImage }}
+                            style={styles.selfieImage}
+                            resizeMode="cover"
+                          />
+                          <Text style={styles.stepCompleted}>
+                            ✓ Selfie Captured
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Ready Step */}
+                  <View style={styles.stepContainer}>
+                    <View
+                      style={[
+                        styles.stepIcon,
+                        currentStepperStep === "ready" && styles.stepIconActive,
+                        currentStepperStep === "ready" &&
+                          styles.stepIconCompleted,
+                      ]}
+                    >
+                      <Text style={styles.stepNumber}>4</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>Ready to Checkout</Text>
+                      <Text style={styles.stepDescription}>
+                        All checks completed. You can now checkout at the event.
+                      </Text>
+                      {currentStepperStep === "ready" &&
+                        emailVerified &&
+                        locationVerified &&
+                        selfieTaken && (
+                          <TouchableOpacity
+                            style={styles.transactButton}
+                            onPress={handleCompleteCheckout}
+                          >
+                            <LinearGradient
+                              colors={["#22c55e", "#16a34a"]}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                              style={styles.transactGradient}
+                            >
+                              <Text style={styles.transactButtonText}>
+                                Transact
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        )}
+                    </View>
                   </View>
                 </View>
               </View>
+            )}
 
-              {/* Organizer Info - Part of Event Details */}
-              {event.organizer && (
-                <View style={styles.organizerCard}>
-                  <View style={styles.organizerHeader}>
-                    <View style={styles.organizerIconContainer}>
-                      <Text style={styles.organizerIcon}>👤</Text>
-                    </View>
-                    <View style={styles.organizerContent}>
-                      <Text style={styles.organizerLabel}>Event Organizer</Text>
-                      <Text style={styles.organizerValue}>
-                        {event.organizer.slice(0, 6)}...
-                        {event.organizer.slice(-4)}
+            {/* Success UI */}
+            {showSuccessUI && (
+              <View style={styles.successUISection}>
+                <View style={styles.successUIContainer}>
+                  <View style={styles.successIconContainer}>
+                    <Text style={styles.successIcon}>🎉</Text>
+                  </View>
+                  <Text style={styles.successTitle}>
+                    Successfully Checked In!
+                  </Text>
+                  <Text style={styles.successSubtitle}>
+                    You have been successfully verified and checked in to the
+                    event.
+                  </Text>
+
+                  <View style={styles.successDetails}>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Event</Text>
+                      <Text
+                        style={styles.successDetailValue}
+                        numberOfLines={3}
+                        ellipsizeMode="tail"
+                      >
+                        {event?.name || "Event"}
                       </Text>
                     </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>
+                        Check-in Time
+                      </Text>
+                      <Text style={styles.successDetailValue}>
+                        {new Date().toLocaleTimeString()}
+                      </Text>
+                    </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Status</Text>
+                      <Text style={styles.successDetailValue}>Active</Text>
+                    </View>
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.continueButton}
+                    onPress={() => setShowSuccessUI(false)}
+                  >
+                    <LinearGradient
+                      colors={["#22c55e", "#16a34a"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.continueGradient}
+                    >
+                      <Text style={styles.continueButtonText}>Continue</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
                 </View>
-              )}
+              </View>
+            )}
+
+            {/* About Section */}
+            <View style={styles.descriptionCard}>
+              <Text style={styles.descriptionLabel}>About This Event</Text>
+              <Text style={styles.eventDescription}>
+                {event.description ||
+                  "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
+              </Text>
             </View>
           </View>
         </ScrollView>
 
-        {/* Transaction Progress or Buy Ticket Button */}
-        <View style={styles.bottomContainer}>
-          {/* Transaction Progress */}
-          {purchaseState === "loading" && (
-            <TransactionProgress
-              currentStep={currentStep}
-              ticketQuantity={ticketQuantity}
-            />
-          )}
-
-          {/* Success Message */}
-          {purchaseState === "success" && (
-            <View style={styles.successContainer}>
-              <Text style={styles.successText}>
-                🎉 {ticketQuantity} ticket{ticketQuantity > 1 ? "s" : ""}{" "}
-                purchased successfully!
-              </Text>
-              <Text style={styles.successSubtext}>
-                Check your wallet for the ticket NFT
-                {ticketQuantity > 1 ? "s" : ""}
-              </Text>
-            </View>
-          )}
-
-          {/* Error Message */}
-          {purchaseState === "error" && (
-            <View style={styles.errorMessageContainer}>
-              <Text style={styles.errorMessageText}>❌ {purchaseError}</Text>
-            </View>
-          )}
-
-          {/* Buy Ticket Button - Only show when not loading and user hasn't purchased tickets */}
-          {purchaseState !== "loading" && (
+        {/* Bottom Action Button */}
+        {checkoutState === "initial" && (
+          <View style={styles.bottomActionContainer}>
             <TouchableOpacity
               style={[
-                styles.buyTicketButton,
-                (!account || usdtBalance < totalPrice) &&
-                  styles.buyTicketButtonDisabled,
-                purchaseState === "success" && styles.buyTicketButtonSuccess,
-                purchaseState === "error" && styles.buyTicketButtonError,
+                styles.startVerificationButton,
+                isVerifying && styles.startVerificationButtonDisabled,
               ]}
-              onPress={handleBuyTicket}
-              disabled={usdtBalance < totalPrice}
+              onPress={handleVerifyEvent}
+              disabled={isVerifying}
             >
               <LinearGradient
-                colors={
-                  purchaseState === "success"
-                    ? ["#4ade80", "#22c55e"]
-                    : purchaseState === "error"
-                    ? ["#f87171", "#ef4444"]
-                    : account
-                    ? ["#22c55e", "#16a34a"]
-                    : ["#666666", "#444444"]
-                }
-                style={styles.buttonGradient}
+                colors={["#667eea", "#764ba2"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.startVerificationGradient}
               >
-                <Text style={styles.buyTicketButtonText}>
-                  {purchaseState === "success"
-                    ? "Tickets Purchased!"
-                    : purchaseState === "error"
-                    ? "Try Again"
-                    : !account
-                    ? "Connect Wallet to Buy"
-                    : usdtBalance < totalPrice
-                    ? "Insufficient USDT Balance"
-                    : `Buy ${ticketQuantity} Ticket${
-                        ticketQuantity > 1 ? "s" : ""
-                      }`}
-                </Text>
+                {isVerifying ? (
+                  <ActivityIndicator size="large" color="#ffffff" />
+                ) : (
+                  <Text style={styles.startVerificationButtonText}>
+                    Start Verification
+                  </Text>
+                )}
               </LinearGradient>
             </TouchableOpacity>
-          )}
-        </View>
+
+            {verificationError && (
+              <Text style={styles.errorText}>{verificationError}</Text>
+            )}
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   );
 };
 
-export default EventPage;
+export default YourEventPage;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -873,6 +585,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
+    marginBottom: 16,
   },
   eventTitle: {
     fontSize: 28,
@@ -881,6 +594,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     flex: 1,
     marginRight: 12,
+    flexShrink: 1,
   },
   eventBadge: {
     backgroundColor: "rgba(34, 197, 94, 0.2)",
@@ -1557,5 +1271,306 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "rgba(255, 255, 255, 0.5)",
     fontFamily: "monospace",
+  },
+  verifySection: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  verifyTitle: {
+    fontSize: 20,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  verifySubtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  verifyButton: {
+    borderRadius: 30,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
+  },
+  verifyGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: "center",
+  },
+  verifyButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  stepperSection: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  stepperTitle: {
+    fontSize: 20,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  stepperSubtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  stepperContainer: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  stepContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  stepIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  stepIconActive: {
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    borderColor: "rgba(34, 197, 94, 0.3)",
+  },
+  stepIconCompleted: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderColor: "rgba(34, 197, 94, 0.2)",
+  },
+  stepNumber: {
+    fontSize: 18,
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  stepDescription: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    marginBottom: 8,
+  },
+
+  stepCompleted: {
+    fontSize: 12,
+    color: "rgba(34, 197, 94, 0.8)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  startVerificationSection: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  startVerificationButton: {
+    borderRadius: 30,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  startVerificationButtonDisabled: {
+    opacity: 0.6,
+  },
+  startVerificationGradient: {
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    alignItems: "center",
+  },
+  startVerificationButtonText: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  stepperSectionInitial: {
+    opacity: 0.4,
+  },
+  stepButton: {
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.3)",
+    marginTop: 8,
+  },
+  stepButtonText: {
+    fontSize: 14,
+    color: "#22c55e",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  transactButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    marginTop: 12,
+  },
+  transactGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  transactButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  selfieContainer: {
+    marginTop: 12,
+    alignItems: "center",
+  },
+  selfieImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: "rgba(34, 197, 94, 0.3)",
+  },
+  successUISection: {
+    marginTop: 20,
+  },
+  successUIContainer: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.2)",
+    alignItems: "center",
+  },
+  successIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  successIcon: {
+    fontSize: 40,
+  },
+  successTitle: {
+    fontSize: 24,
+    color: "#22c55e",
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  successSubtitle: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  successDetails: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  successDetailItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  successDetailLabel: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    flexShrink: 0,
+    marginRight: 8,
+  },
+  successDetailValue: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+    marginLeft: 8,
+    flexShrink: 1,
+  },
+  continueButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  continueGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  continueButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  bottomActionContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
 });
