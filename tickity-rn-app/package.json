@@ -46,12 +46,14 @@
     "expo-linear-gradient": "~14.1.5",
     "expo-linking": "~7.1.7",
     "expo-location": "~18.1.6",
+    "expo-media-library": "~17.1.7",
     "expo-router": "~5.1.4",
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",
     "expo-system-ui": "~5.0.10",
     "expo-three": "^8.0.0",
     "expo-three-orbit-controls": "^2.0.0",
+    "expo-updates": "~0.28.17",
     "expo-web-browser": "~14.2.0",
     "graphql": "^16.11.0",
     "graphql-request": "^7.2.0",
@@ -69,9 +71,11 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
+    "react-native-view-shot": "4.0.3",
     "react-native-web": "~0.20.0",
     "thirdweb": "^5.105.21",
-    "three": "^0.166.0"
+    "three": "^0.166.0",
+    "three-stdlib": "^2.36.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

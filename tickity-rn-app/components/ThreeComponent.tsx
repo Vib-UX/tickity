@@ -1,20 +1,23 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
+import * as MediaLibrary from "expo-media-library";
 import { Renderer } from "expo-three";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   AppState,
+  Image,
   Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import * as THREE from "three";
-
 export default function ThreeScene() {
   const glViewRef = useRef(null);
+  const containerRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [error, setError] = useState<string | null>(null);
   const [isArSupported, setIsArSupported] = useState(false);
@@ -22,6 +25,10 @@ export default function ThreeScene() {
   const [isActive, setIsActive] = useState(true);
   const [isFocused, setIsFocused] = useState(true);
   const [key, setKey] = useState(0); // Force re-render when needed
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"front" | "back">("front");
+  const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
+  const [isCameraSwitching, setIsCameraSwitching] = useState(false);
 
   // Refs to track current state
   const renderLoopRef = useRef<number | null>(null);
@@ -32,6 +39,115 @@ export default function ThreeScene() {
   const addDebugInfo = (info: string) => {
     console.log(`[AR Debug]: ${info}`);
     setDebugInfo((prev) => [...prev.slice(-4), info]); // Keep last 5 debug messages
+  };
+
+  // Switch camera function
+  const switchCamera = () => {
+    setIsCameraSwitching(true);
+    setCameraFacing((prev) => (prev === "front" ? "back" : "front"));
+    addDebugInfo(
+      `Switched to ${cameraFacing === "front" ? "back" : "front"} camera`
+    );
+
+    // Add a small delay to allow camera to switch smoothly
+    setTimeout(() => {
+      setIsCameraSwitching(false);
+    }, 300);
+  };
+
+  // Screenshot function
+  const takeScreenshot = async () => {
+    if (isCapturing) return;
+
+    setIsCapturing(true);
+    addDebugInfo("Taking screenshot...");
+
+    try {
+      // Request media library permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please grant media library access to save screenshots."
+        );
+        return;
+      }
+
+      // Try multiple react-native-view-shot methods
+      try {
+        let screenshotUri = null;
+
+        // Method 1: Try captureScreen (captures entire screen)
+        try {
+          const { captureScreen } = require("react-native-view-shot");
+          screenshotUri = await captureScreen({
+            format: "png",
+            quality: 1,
+            result: "tmpfile",
+          });
+          addDebugInfo("Screenshot captured via captureScreen");
+        } catch (screenError) {
+          console.warn("captureScreen failed:", screenError);
+
+          // Method 2: Try captureRef with container
+          try {
+            const { captureRef } = require("react-native-view-shot");
+            screenshotUri = await captureRef(containerRef, {
+              format: "png",
+              quality: 1,
+              result: "tmpfile",
+            });
+            addDebugInfo("Screenshot captured via captureRef");
+          } catch (refError) {
+            console.warn("captureRef failed:", refError);
+
+            // Method 3: Try captureRef with GL view
+            try {
+              const { captureRef } = require("react-native-view-shot");
+              screenshotUri = await captureRef(glViewRef, {
+                format: "png",
+                quality: 1,
+                result: "tmpfile",
+              });
+              addDebugInfo("Screenshot captured via GL view");
+            } catch (glError) {
+              console.warn("GL capture failed:", glError);
+              throw new Error("All react-native-view-shot methods failed");
+            }
+          }
+        }
+
+        if (screenshotUri) {
+          setCapturedImageUri(screenshotUri);
+          addDebugInfo("Screenshot captured and displayed");
+
+          Alert.alert(
+            "Screenshot Captured!",
+            "Your AR photo has been captured and displayed on screen.",
+            [{ text: "OK" }]
+          );
+        } else {
+          throw new Error("No screenshot URI generated");
+        }
+      } catch (error) {
+        console.error("Screenshot error:", error);
+        addDebugInfo(`Screenshot failed: ${error}`);
+
+        Alert.alert(
+          "Screenshot Failed",
+          "Unable to capture screenshot. Please try again.",
+          [{ text: "OK" }]
+        );
+      }
+
+      addDebugInfo("Screenshot dialog shown");
+    } catch (error) {
+      Alert.alert("Error", "Failed to take screenshot. Please try again.");
+      console.error("Screenshot error:", error);
+      addDebugInfo(`Screenshot failed: ${error}`);
+    } finally {
+      setIsCapturing(false);
+    }
   };
 
   // Handle React Navigation focus/blur events
@@ -379,10 +495,10 @@ export default function ThreeScene() {
     scene.add(directionalLight);
 
     // Add test object - rotating cube
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
 
     const texture = new THREE.TextureLoader().load(
-      require("../assets/res/texture_0.webp")
+      require("../assets/res/eth-obj.png")
     );
     texture.colorSpace = THREE.SRGBColorSpace;
 
@@ -392,7 +508,8 @@ export default function ThreeScene() {
       opacity: 1,
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(0, 0, -0.5);
+    // Position for selfie view - move to top right so it doesn't block face
+    mesh.position.set(0.8, 0.5, -1);
     mesh.castShadow = true;
     scene.add(mesh);
 
@@ -527,7 +644,7 @@ export default function ThreeScene() {
       const mesh = (scene as any).animatedMesh;
       if (mesh && mesh.material) {
         mesh.material.color.setHex(0x00ff00); // Green for fallback mode
-        mesh.scale.setScalar(2); // Make it bigger
+        mesh.scale.setScalar(0.4); // Make it bigger
       }
 
       startRenderLoop(renderer, scene, camera, gl);
@@ -568,15 +685,21 @@ export default function ThreeScene() {
   }
 
   return (
-    <View style={styles.container}>
+    <View ref={containerRef} style={styles.container}>
       {/* Camera background - always show for AR effect */}
       <CameraView
-        key={`camera-${key}`} // Force camera to recreate when key changes
         style={styles.camera}
-        facing="back"
+        facing={cameraFacing}
         enableTorch={false}
         pointerEvents="none"
       />
+
+      {/* Camera switching overlay */}
+      {isCameraSwitching && (
+        <View style={styles.cameraSwitchingOverlay}>
+          <Text style={styles.cameraSwitchingText}>Switching camera...</Text>
+        </View>
+      )}
 
       {/* 3D Scene overlay */}
       <GLView
@@ -586,15 +709,56 @@ export default function ThreeScene() {
         onContextCreate={onContextCreate}
       />
 
+      {/* Camera controls */}
+      <View style={styles.cameraControls}>
+        {/* Switch camera button */}
+        <TouchableOpacity
+          style={styles.switchCameraButton}
+          onPress={switchCamera}
+        >
+          <Text style={styles.switchCameraButtonText}>
+            🔄 {cameraFacing === "front" ? "Back" : "Front"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Capture button */}
+        <TouchableOpacity
+          style={styles.captureButton}
+          onPress={takeScreenshot}
+          disabled={isCapturing}
+        >
+          <Text style={styles.captureButtonText}>
+            {isCapturing ? "Capturing..." : "📸 Capture"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Captured image overlay */}
+      {capturedImageUri && (
+        <View style={styles.capturedImageContainer}>
+          <Image
+            source={{ uri: capturedImageUri }}
+            style={styles.capturedImage}
+            resizeMode="contain"
+          />
+          <TouchableOpacity
+            style={styles.closeImageButton}
+            onPress={() => setCapturedImageUri(null)}
+          >
+            <Text style={styles.closeImageButtonText}>✕ Close</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Debug info overlay */}
       {/* <View style={styles.debugContainer}>
-        {debugInfo.map((info, index) => (
-          <Text key={index} style={styles.debugText}>
-            {info}
-          </Text>
-        ))}
-        {error && <Text style={styles.errorText}>{error}</Text>}
-      </View> */}
+          {debugInfo.map((info, index) => (
+            <Text key={index} style={styles.debugText}>
+              {info}
+            </Text>
+          ))}
+          {error && <Text style={styles.errorText}>{error}</Text>}
+        </View> */}
     </View>
   );
 }
@@ -659,5 +823,91 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     textAlign: "center",
+  },
+  captureButton: {
+    position: "absolute",
+    bottom: 50,
+    alignSelf: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  captureButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  cameraControls: {
+    position: "absolute",
+    bottom: 50,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  switchCameraButton: {
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  switchCameraButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  capturedImageContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  capturedImage: {
+    width: "90%",
+    height: "80%",
+    borderRadius: 10,
+  },
+  closeImageButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "white",
+  },
+  closeImageButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  cameraSwitchingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  cameraSwitchingText: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
   },
 });

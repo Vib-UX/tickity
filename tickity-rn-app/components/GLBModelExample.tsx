@@ -14,31 +14,3 @@ export default function GLBModelExample() {
     />
   );
 }
-
-// Alternative usage examples:
-
-// For a local file in assets folder:
-export function LocalGLBExample() {
-  return (
-    <GLBModelViewer
-      modelPath={require("../assets/models/my-model.glb")}
-      scale={2}
-      position={[0, 0, -3]}
-      enableCamera={false}
-      backgroundColor={0x1a1a1a}
-    />
-  );
-}
-
-// For AR mode with camera background:
-export function ARGLBExample() {
-  return (
-    <GLBModelViewer
-      modelPath="path/to/your/model.glb"
-      scale={0.5}
-      position={[0, 0, -1]}
-      enableCamera={true}
-      enableRotation={false} // Static model for AR
-    />
-  );
-}

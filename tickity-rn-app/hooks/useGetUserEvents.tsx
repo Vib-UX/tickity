@@ -1,11 +1,12 @@
 import getEvents from "@/constants/subgraph";
 import { chain, client } from "@/constants/thirdweb";
+import { Event } from "@/types/event";
 import { useQuery } from "@tanstack/react-query";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
 
-interface EventWithTickets {
-  event: any;
+export interface EventWithTickets {
+  event: Event;
   userTickets: readonly bigint[];
   hasTickets: boolean;
   ticketCount: number;

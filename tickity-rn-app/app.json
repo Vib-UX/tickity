@@ -19,7 +19,8 @@
         "NSCameraUsageDescription": "This app uses the camera for AR experiences.",
         "ARKit": true
       },
-      "capabilities": ["ARKit"]
+      "capabilities": ["ARKit", "ARKit", "ARKit", "ARKit"],
+      "bundleIdentifier": "com.cryptokrotus.tickity"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,12 +28,18 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cryptokrotus.myapp",
+      "package": "com.cryptokrotus.tickity",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "intentFilters": [
+        {
+          "action": "android.intent.action.MAIN",
+          "category": ["android.intent.category.LAUNCHER"]
+        },
         {
           "action": "android.intent.action.MAIN",
           "category": ["android.intent.category.LAUNCHER"]
@@ -74,8 +81,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a0292d18-2584-4b18-94d4-90b52bb0e5bb"
+        "projectId": "30b13788-ce5c-4ccf-9428-5962b35b5539"
       }
+    },
+    "owner": "cryptokrotus",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/30b13788-ce5c-4ccf-9428-5962b35b5539"
     }
   }
 }

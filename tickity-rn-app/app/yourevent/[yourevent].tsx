@@ -2,17 +2,17 @@ import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModal from "@/components/NFTModal";
+import { chain, client } from "@/constants/thirdweb";
 import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useNavigation } from "expo-router";
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,7 +20,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useActiveAccount } from "thirdweb/react";
+import { getContract, getContractEvents, prepareContractCall } from "thirdweb";
+import { useActiveAccount, useSendCalls } from "thirdweb/react";
+import GLVIEWAPP from "./GLVIEW";
 
 // Define checkout states
 type CheckoutState = "initial" | "verifying" | "stepper" | "completed";
@@ -33,8 +35,9 @@ const YourEventPage = () => {
   const account = useActiveAccount();
   const { data, isLoading, error } = useGetUserEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
-
+  const [transactionHash, setTransactionHash] = useState("");
   // State management
+  const [showAR, setShowAR] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("initial");
   const [currentStepperStep, setCurrentStepperStep] =
     useState<StepperStep>("email");
@@ -46,7 +49,10 @@ const YourEventPage = () => {
   const [showSuccessUI, setShowSuccessUI] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
-
+  const [distanceToEvent, setDistanceToEvent] = useState<number | null>(null);
+  const [showDistanceWarning, setShowDistanceWarning] = useState(false);
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
+  const { mutateAsync: sendCalls } = useSendCalls();
   const event = useMemo(() => {
     if (!data || !eventId) return null;
     const events = (data as any)?.events || [];
@@ -54,6 +60,14 @@ const YourEventPage = () => {
       (item: any) => item.event.eventAddress === eventId
     );
     return eventWithTickets?.event as Event;
+  }, [data, eventId]);
+  const userTickets = useMemo(() => {
+    if (!data || !eventId) return null;
+    const events = (data as any)?.events || [];
+    const eventWithTickets = events.find(
+      (item: any) => item.event.eventAddress === eventId
+    );
+    return eventWithTickets?.userTickets as bigint[];
   }, [data, eventId]);
 
   useLayoutEffect(() => {
@@ -104,14 +118,50 @@ const YourEventPage = () => {
     setCurrentStepperStep("location");
   };
 
-  const handleLocationCheck = async () => {
-    try {
-      // Check if we're on a device (not simulator)
-      if (Platform.OS === "android") {
-        // Note: In a real app, you might want to check if running on emulator
-        // For now, we'll proceed with location request
-      }
+  // Static event location (in real app, this would come from the event data)
+  const eventLocation = {
+    latitude: 19.2095669, // San Francisco coordinates as example
+    longitude: 73.0934042,
+  };
 
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    // This function uses the Haversine formula to calculate the great-circle distance between two points on a sphere
+    // The formula calculates the shortest distance between two points on Earth's surface
+    // Parameters:
+    // - lat1, lon1: Latitude and longitude of first point in decimal degrees
+    // - lat2, lon2: Latitude and longitude of second point in decimal degrees
+    // Returns: Distance in meters
+
+    const R = 6371e3; // Earth's radius in meters
+
+    // Convert latitude/longitude from degrees to radians
+    const φ1 = (lat1 * Math.PI) / 180; // φ is latitude in radians
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180; // Δφ is change in latitude
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180; // Δλ is change in longitude
+
+    // Haversine formula components:
+    // a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
+    // c = 2·atan2(√a, √(1−a))
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Final distance = R·c where R is Earth's radius
+    return R * c; // Distance in meters
+  };
+
+  const handleLocationCheck = async () => {
+    setIsCheckingLocation(true);
+    try {
       // Request location permissions
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -124,46 +174,180 @@ const YourEventPage = () => {
 
       // Get current location
       let location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
 
-      // Simulate location verification (in real app, you'd check against event coordinates)
       console.log("Current location:", location);
+      console.log("Event location:", eventLocation);
 
-      // For demo purposes, we'll assume location is verified
-      setLocationVerified(true);
-      setCurrentStepperStep("selfie");
-
-      Alert.alert(
-        "Location Verified",
-        "Your location has been verified successfully!"
+      // Calculate distance to event
+      const distance = calculateDistance(
+        location.coords.latitude,
+        location.coords.longitude,
+        eventLocation.latitude,
+        eventLocation.longitude
       );
+
+      console.log("Distance to event:", distance, "meters");
+      // Check if user is within 100m
+      if (distance <= 100) {
+        setLocationVerified(true);
+        setCurrentStepperStep("selfie");
+        setDistanceToEvent(distance);
+        setShowDistanceWarning(false);
+        Alert.alert(
+          "Location Verified",
+          `You are ${Math.round(
+            distance
+          )}m from the event. Location verified successfully!`
+        );
+      } else {
+        // Show UI that user needs to be within 100m
+        setLocationVerified(false);
+        setDistanceToEvent(distance);
+        setShowDistanceWarning(true);
+        Alert.alert(
+          "Too Far from Event",
+          `You are ${Math.round(
+            distance
+          )}m from the event. Please move within 100m of the event location to proceed.`
+        );
+      }
     } catch (error) {
       console.error("Location error:", error);
       Alert.alert(
         "Location Error",
         "Failed to get your location. Please try again."
       );
+    } finally {
+      setIsCheckingLocation(false);
     }
   };
 
   const handleSelfieCapture = () => {
     // Simulate selfie capture
     setSelfieTaken(true);
+    setShowAR(false);
     setSelfieImage(
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop"
     );
     setCurrentStepperStep("ready");
   };
 
-  const handleCompleteCheckout = () => {
-    setShowNFTModal(true);
+  const eventContract = getContract({
+    client: client,
+    address: eventId,
+    chain: chain,
+  });
+
+  const handleCompleteCheckout = async () => {
+    try {
+      setTransactionHash("");
+
+      if (!event) {
+        throw new Error("Event not found");
+      }
+
+      const sendTx2 = prepareContractCall({
+        contract: eventContract,
+        method: "function useTicket(uint256 tokenId) external",
+        params: [userTickets?.[0] || BigInt(0)],
+      });
+
+      await sendCalls({
+        calls: [sendTx2],
+      });
+
+      console.log("Done");
+
+      setShowSuccessUI(true);
+    } catch (error) {
+      console.log("error", error);
+      if (
+        error instanceof Error &&
+        error.message.includes("Failed to get user operation receipt")
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const logs = await getContractEvents({
+          contract: eventContract,
+          events: [
+            {
+              // @ts-ignore
+              name: "TicketUsed",
+              inputs: [
+                {
+                  name: "tokenId",
+                  type: "uint256",
+                  indexed: true,
+                  internalType: "uint256",
+                },
+                {
+                  name: "eventId",
+                  type: "uint256",
+                  indexed: true,
+                  internalType: "uint256",
+                },
+                {
+                  name: "user",
+                  type: "address",
+                  indexed: true,
+                  internalType: "address",
+                },
+                {
+                  name: "useTime",
+                  type: "uint256",
+                  indexed: false,
+                  internalType: "uint256",
+                },
+                {
+                  name: "eventName",
+                  type: "string",
+                  indexed: false,
+                  internalType: "string",
+                },
+                {
+                  name: "ticketTypeName",
+                  type: "string",
+                  indexed: false,
+                  internalType: "string",
+                },
+              ],
+            },
+          ],
+          queryFilter: {
+            fromBlock: "earliest",
+            toBlock: "latest",
+          },
+        });
+        const latestLog = logs[0].transactionHash;
+        const tx = logs[logs.length - 1];
+        console.log({
+          latestLog,
+          tx: tx.transactionHash,
+        });
+        if (tx.transactionHash) {
+          setTransactionHash(tx.transactionHash);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          setShowNFTModal(true);
+          return;
+        }
+      }
+    }
   };
 
   const handleCloseNFTModal = () => {
     setShowNFTModal(false);
     setShowSuccessUI(true);
   };
+
+  if (showAR) {
+    return (
+      <GLVIEWAPP
+        onClose={() => setShowAR(false)}
+        onComplete={handleSelfieCapture}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -243,16 +427,30 @@ const YourEventPage = () => {
 
           {/* Event Content */}
           <View style={styles.content}>
+            {/* About Section - Moved to top */}
+
             {/* Event Title */}
             <View style={styles.eventHeader}>
               <Text style={styles.eventTitle} numberOfLines={2}>
                 {event.name || `Event #${event.id.slice(-6)}`}
               </Text>
               <View style={styles.eventBadge}>
-                <Text style={styles.eventBadgeText}>Your Event</Text>
+                <Text style={styles.eventBadgeText}>Going</Text>
               </View>
             </View>
-
+            <View style={styles.descriptionCard}>
+              <Text style={styles.descriptionLabel}>About This Event</Text>
+              <ScrollView
+                style={styles.descriptionScrollView}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                <Text style={styles.eventDescription}>
+                  {event.description ||
+                    "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
+                </Text>
+              </ScrollView>
+            </View>
             {/* Event Details */}
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Event Details</Text>
@@ -291,6 +489,138 @@ const YourEventPage = () => {
                 </View>
               </View>
             </View>
+
+            {/* Success UI */}
+            {showSuccessUI && (
+              <View style={styles.successUISection}>
+                <View style={styles.successUIContainer}>
+                  <View style={styles.successIconContainer}>
+                    <Text style={styles.successIcon}>🎉</Text>
+                  </View>
+                  <Text style={styles.successTitle}>
+                    Successfully Checked In!
+                  </Text>
+                  <Text style={styles.successSubtitle}>
+                    You have been successfully verified and checked in to the
+                    event.
+                  </Text>
+
+                  <View style={styles.successDetails}>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Event</Text>
+                      <Text
+                        style={styles.successDetailValue}
+                        numberOfLines={3}
+                        ellipsizeMode="tail"
+                      >
+                        {event?.name || "Event"}
+                      </Text>
+                    </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>
+                        Check-in Time
+                      </Text>
+                      <Text style={styles.successDetailValue}>
+                        {new Date().toLocaleTimeString()}
+                      </Text>
+                    </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Status</Text>
+                      <Text style={styles.successDetailValue}>Active</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.continueButton}
+                    onPress={() => setShowSuccessUI(false)}
+                  >
+                    <LinearGradient
+                      colors={["#22c55e", "#16a34a"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.continueGradient}
+                    >
+                      <Text style={styles.continueButtonText}>Continue</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {/* Distance Warning UI - Moved above checkout process */}
+            {showDistanceWarning && distanceToEvent !== null && (
+              <View style={styles.distanceWarningSection}>
+                <View style={styles.distanceWarningContainer}>
+                  <View style={styles.distanceWarningIconContainer}>
+                    <Text style={styles.distanceWarningIcon}>📍</Text>
+                  </View>
+                  <Text style={styles.distanceWarningTitle}>
+                    Too Far from Event
+                  </Text>
+                  <Text style={styles.distanceWarningSubtitle}>
+                    You need to be within 100m of the event location to proceed
+                    with verification.
+                  </Text>
+
+                  <View style={styles.distanceInfoContainer}>
+                    <View style={styles.distanceInfoItem}>
+                      <Text style={styles.distanceInfoLabel}>
+                        Current Distance
+                      </Text>
+                      <Text style={styles.distanceInfoValue}>
+                        {Math.round(distanceToEvent)}m from event
+                      </Text>
+                    </View>
+                    <View style={styles.distanceInfoItem}>
+                      <Text style={styles.distanceInfoLabel}>
+                        Required Distance
+                      </Text>
+                      <Text style={styles.distanceInfoValue}>Within 100m</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.distanceWarningActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.retryLocationButton,
+                        isCheckingLocation &&
+                          styles.retryLocationButtonDisabled,
+                      ]}
+                      onPress={handleLocationCheck}
+                      disabled={isCheckingLocation}
+                    >
+                      <LinearGradient
+                        colors={["#22c55e", "#16a34a"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.retryLocationGradient}
+                      >
+                        {isCheckingLocation ? (
+                          <View style={styles.retryLocationButtonLoading}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Text style={styles.retryLocationButtonText}>
+                              Checking Location...
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.retryLocationButtonText}>
+                            Check Location Again
+                          </Text>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.dismissWarningButton}
+                      onPress={() => setShowDistanceWarning(false)}
+                    >
+                      <Text style={styles.dismissWarningButtonText}>
+                        Dismiss
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Stepper - Only show after verification starts */}
             {checkoutState !== "initial" && (
@@ -355,12 +685,28 @@ const YourEventPage = () => {
                       {currentStepperStep === "location" &&
                         !locationVerified && (
                           <TouchableOpacity
-                            style={styles.stepButton}
+                            style={[
+                              styles.stepButton,
+                              isCheckingLocation && styles.stepButtonDisabled,
+                            ]}
                             onPress={handleLocationCheck}
+                            disabled={isCheckingLocation}
                           >
-                            <Text style={styles.stepButtonText}>
-                              Check Location
-                            </Text>
+                            {isCheckingLocation ? (
+                              <View style={styles.stepButtonLoading}>
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#22c55e"
+                                />
+                                <Text style={styles.stepButtonText}>
+                                  Checking Location...
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.stepButtonText}>
+                                Check Location
+                              </Text>
+                            )}
                           </TouchableOpacity>
                         )}
                       {locationVerified && (
@@ -391,22 +737,15 @@ const YourEventPage = () => {
                       {currentStepperStep === "selfie" && !selfieTaken && (
                         <TouchableOpacity
                           style={styles.stepButton}
-                          onPress={handleSelfieCapture}
+                          onPress={() => setShowAR(true)}
                         >
                           <Text style={styles.stepButtonText}>Take Selfie</Text>
                         </TouchableOpacity>
                       )}
-                      {selfieTaken && selfieImage && (
-                        <View style={styles.selfieContainer}>
-                          <Image
-                            source={{ uri: selfieImage }}
-                            style={styles.selfieImage}
-                            resizeMode="cover"
-                          />
-                          <Text style={styles.stepCompleted}>
-                            ✓ Selfie Captured
-                          </Text>
-                        </View>
+                      {selfieTaken && (
+                        <Text style={styles.stepCompleted}>
+                          ✓ Selfie Captured
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -453,72 +792,6 @@ const YourEventPage = () => {
                 </View>
               </View>
             )}
-
-            {/* Success UI */}
-            {showSuccessUI && (
-              <View style={styles.successUISection}>
-                <View style={styles.successUIContainer}>
-                  <View style={styles.successIconContainer}>
-                    <Text style={styles.successIcon}>🎉</Text>
-                  </View>
-                  <Text style={styles.successTitle}>
-                    Successfully Checked In!
-                  </Text>
-                  <Text style={styles.successSubtitle}>
-                    You have been successfully verified and checked in to the
-                    event.
-                  </Text>
-
-                  <View style={styles.successDetails}>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>Event</Text>
-                      <Text
-                        style={styles.successDetailValue}
-                        numberOfLines={3}
-                        ellipsizeMode="tail"
-                      >
-                        {event?.name || "Event"}
-                      </Text>
-                    </View>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>
-                        Check-in Time
-                      </Text>
-                      <Text style={styles.successDetailValue}>
-                        {new Date().toLocaleTimeString()}
-                      </Text>
-                    </View>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>Status</Text>
-                      <Text style={styles.successDetailValue}>Active</Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={() => setShowSuccessUI(false)}
-                  >
-                    <LinearGradient
-                      colors={["#22c55e", "#16a34a"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.continueGradient}
-                    >
-                      <Text style={styles.continueButtonText}>Continue</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* About Section */}
-            <View style={styles.descriptionCard}>
-              <Text style={styles.descriptionLabel}>About This Event</Text>
-              <Text style={styles.eventDescription}>
-                {event.description ||
-                  "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
-              </Text>
-            </View>
           </View>
         </ScrollView>
 
@@ -657,6 +930,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
+    maxHeight: 100,
+  },
+  descriptionScrollView: {
+    maxHeight: 60,
   },
   descriptionLabel: {
     fontSize: 14,
@@ -1476,6 +1753,14 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  stepButtonDisabled: {
+    opacity: 0.6,
+  },
+  stepButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   transactButton: {
     borderRadius: 16,
     overflow: "hidden",
@@ -1612,5 +1897,124 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.9)",
     borderTopWidth: 1,
     borderTopColor: "rgba(255, 255, 255, 0.1)",
+  },
+  // Distance Warning Styles
+  distanceWarningSection: {
+    marginTop: 20,
+  },
+  distanceWarningContainer: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.2)",
+    alignItems: "center",
+  },
+  distanceWarningIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  distanceWarningIcon: {
+    fontSize: 40,
+  },
+  distanceWarningTitle: {
+    fontSize: 24,
+    color: "#ef4444",
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  distanceWarningSubtitle: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  distanceInfoContainer: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  distanceInfoItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  distanceInfoLabel: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    flexShrink: 0,
+    marginRight: 8,
+  },
+  distanceInfoValue: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+    marginLeft: 8,
+    flexShrink: 1,
+  },
+  distanceWarningActions: {
+    width: "100%",
+    gap: 12,
+  },
+  retryLocationButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  retryLocationGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  retryLocationButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  retryLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryLocationButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dismissWarningButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  dismissWarningButtonText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });

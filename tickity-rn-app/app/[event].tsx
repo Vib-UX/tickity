@@ -24,7 +24,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getContract, getContractEvents, prepareContractCall } from "thirdweb";
 import { approve } from "thirdweb/extensions/erc20";
-import { useActiveAccount, useSendCalls } from "thirdweb/react";
+import {
+  useActiveAccount,
+  useSendBatchTransaction,
+  useSendCalls,
+} from "thirdweb/react";
 import { formatNumber } from "thirdweb/utils";
 
 const { width, height } = Dimensions.get("window");
@@ -121,8 +125,37 @@ const EventPage = () => {
 
   const totalPrice = selectedTicketPrice * BigInt(ticketQuantity);
 
+  const { mutate: sendBatch, isPending } = useSendBatchTransaction();
+
+  const handleClick = async () => {
+    console.log(eventContract.address, "eventContract.address");
+    const sendTx1 = approve({
+      contract: usdcContract,
+      amount: 1,
+      spender: eventContract.address as `0x${string}`,
+    });
+
+    const sendTx2 = prepareContractCall({
+      contract: eventContract,
+      method:
+        "function purchaseTicket(uint256 ticketTypeIndex) external payable",
+      params: [BigInt(0)],
+    });
+
+    const transactions = [sendTx1, sendTx2];
+    sendBatch(transactions, {
+      onError: (error) => {
+        alert(`Error: ${error.message}`);
+      },
+      onSuccess: (result) => {
+        alert("Success! Tx hash: " + result.transactionHash);
+      },
+    });
+  };
+
   const purchaseTicket = async () => {
     try {
+      console.log(event?.eventId, "eventId");
       setTransactionHash("");
       setPurchaseState("loading");
       setPurchaseError("");
