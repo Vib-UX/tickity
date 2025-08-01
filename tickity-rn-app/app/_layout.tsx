@@ -1,7 +1,6 @@
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ThirdwebWrapper from "@/components/ThirdwebWrapper";
 import { useColorScheme } from "@/components/useColorScheme";
-import { validateEnvironmentVariables } from "@/utils/envValidation";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { PortalProvider } from "@gorhom/portal";
 import {
@@ -13,7 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
@@ -107,6 +106,13 @@ function RootLayoutNav() {
             <QueryClientProvider client={queryClient}>
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="yourevent"
+                  options={{
+                    headerShown: false,
+                    presentation: "modal",
+                  }}
+                />
               </Stack>
             </QueryClientProvider>
           </PortalProvider>

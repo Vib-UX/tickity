@@ -1,14 +1,18 @@
 import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
-import NFTModal from "@/components/NFTModal";
+import NFTModalYourEvent from "@/components/NFTModalYourEvent";
 import TransactionProgress from "@/components/TransactionProgress";
+import { API_URL } from "@/constants/addresses";
 import { chain, client } from "@/constants/thirdweb";
 import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -39,6 +43,28 @@ const YourEventPage = () => {
   const { data, isLoading, error } = useGetUserEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
   const [transactionHash, setTransactionHash] = useState("");
+  const router = useRouter();
+
+  const { data: eventStoredData, refetch: refetchEventStoredData } = useQuery({
+    queryKey: ["transactionHash", eventId, account?.address],
+    queryFn: async () => {
+      const transactionData = await AsyncStorage.getItem(eventId);
+      const transactionDataParsed = await JSON.parse(transactionData || "{}");
+      console.log("transactionDataParsed", transactionDataParsed);
+
+      if (transactionDataParsed.address === account?.address) {
+        return {
+          image: transactionDataParsed?.image,
+          txHash: transactionDataParsed?.transactionHash,
+        };
+      } else {
+        return {
+          image: null,
+          txHash: null,
+        };
+      }
+    },
+  });
 
   // Transaction state management
   const [transactionState, setTransactionState] =
@@ -82,10 +108,20 @@ const YourEventPage = () => {
   }, [data, eventId]);
 
   useLayoutEffect(() => {
+    const title = event?.name
+      ? event.name.slice(0, 20) + "..."
+      : `Event #${eventId?.slice(-6) || "N/A"}`;
     navigation.setOptions({
-      title:
-        event?.name.slice(0, 20) + "..." ||
-        `Event #${eventId?.slice(-6) || "N/A"}`,
+      title,
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => {
+            router.back();
+          }}
+        >
+          <Ionicons name="arrow-back-outline" size={30} color={"#ffffff"} />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation, eventId, event]);
 
@@ -274,13 +310,10 @@ const YourEventPage = () => {
         type: "image/jpeg",
       } as any);
 
-      const uploadResponse = await fetch(
-        "https://42e13f0b6c67.ngrok-free.app/test-ghibli",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const uploadResponse = await fetch(API_URL, {
+        method: "POST",
+        body: formData,
+      });
 
       if (uploadResponse.ok) {
         const result = await uploadResponse.json();
@@ -289,11 +322,12 @@ const YourEventPage = () => {
         return null;
       }
     } catch (error) {
-      return null;
+      throw new Error("Failed to upload image");
     }
   };
 
   const handleCompleteCheckout = async () => {
+    let imageUrlUpdate = "";
     try {
       setTransactionHash("");
       setTransactionState("loading");
@@ -304,19 +338,17 @@ const YourEventPage = () => {
         throw new Error("Event not found");
       }
 
-      // Upload selfie image if available
       if (selfieImage) {
         setCurrentStep("Uploading check-in photo...");
         const imageUrl = await uploadImage(selfieImage);
+        if (imageUrl === null) {
+          throw new Error("Failed to upload image");
+        }
+        console.log("imageUrl", imageUrl);
+        imageUrlUpdate = imageUrl;
         setDisplayNftImage(imageUrl);
-        setTransactionState("success");
-        setTransactionError("");
-        setShowNFTModal(true);
-        return;
       }
-
       setCurrentStep("Processing transaction...");
-
       const sendTx2 = prepareContractCall({
         contract: eventContract,
         method: "function useTicket(uint256 tokenId) external",
@@ -334,7 +366,6 @@ const YourEventPage = () => {
       setShowSuccessUI(true);
     } catch (error) {
       console.log("error", error);
-
       // Only execute the fallback logic if the error contains the specific message
       if (
         error instanceof Error &&
@@ -406,6 +437,19 @@ const YourEventPage = () => {
           setTransactionState("success");
           setTransactionError("");
           setShowNFTModal(true);
+          console.log("setting", {
+            address: account?.address,
+            image: imageUrlUpdate,
+            transactionHash: tx.transactionHash,
+          });
+          await AsyncStorage.setItem(
+            eventId,
+            JSON.stringify({
+              address: account?.address,
+              image: imageUrlUpdate,
+              transactionHash: tx.transactionHash,
+            })
+          );
           return;
         }
       }
@@ -419,6 +463,7 @@ const YourEventPage = () => {
         setCurrentStep("");
       }, 5000);
     }
+    refetchEventStoredData();
   };
 
   const handleCloseNFTModal = () => {
@@ -434,9 +479,36 @@ const YourEventPage = () => {
   };
 
   const handleOpenTransactionURL = () => {
-    if (transactionHash) {
-      const url = `https://sepolia.etherscan.io/tx/${transactionHash}`;
-      Linking.openURL(url);
+    if (!transactionHash && !eventStoredData?.txHash) {
+      console.warn("No transaction hash available to open explorer URL");
+      return;
+    }
+
+    const hash = transactionHash || eventStoredData?.txHash;
+    if (!hash) {
+      console.warn("Transaction hash is undefined");
+      return;
+    }
+
+    const explorerUrl = `https://testnet.explorer.etherlink.com/tx/${hash}`;
+    Linking.openURL(explorerUrl).catch((error) => {
+      console.error("Failed to open explorer URL:", error);
+    });
+  };
+
+  const handleShareOnTwitter = async () => {
+    const imageUrl = eventStoredData?.image;
+    const shareMessage = `🎉 Just checked in to ${
+      event?.name || "an event"
+    }! 🎫✨\n\n#NFT #Tickity #EventTickets\n\n${imageUrl}`;
+
+    try {
+      const webUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        shareMessage
+      )}`;
+      Linking.openURL(webUrl);
+    } catch (error) {
+      console.error("Error sharing:", error);
     }
   };
 
@@ -492,7 +564,7 @@ const YourEventPage = () => {
     >
       <SafeAreaView style={styles.safeArea}>
         <SignInBottomSheet ref={signInBottomSheetRef} />
-        <NFTModal
+        <NFTModalYourEvent
           visible={showNFTModal}
           onClose={handleCloseNFTModal}
           nftImage={displayNftImage}
@@ -589,7 +661,7 @@ const YourEventPage = () => {
             </View>
 
             {/* Success UI */}
-            {showSuccessUI && (
+            {(showSuccessUI || eventStoredData?.txHash) && (
               <View style={styles.successUISection}>
                 <View style={styles.successUIContainer}>
                   <View style={styles.successIconContainer}>
@@ -629,14 +701,16 @@ const YourEventPage = () => {
                   </View>
 
                   {/* Selfie Image Display */}
-                  {selfieImage && (
+                  {eventStoredData?.image && (
                     <View style={styles.selfieSection}>
                       <Text style={styles.selfieTitle}>
                         Your Check-in Photo
                       </Text>
                       <View style={styles.selfieImageContainer}>
                         <Image
-                          source={{ uri: selfieImage }}
+                          source={{
+                            uri: eventStoredData?.image,
+                          }}
                           style={styles.selfieImage}
                           resizeMode="cover"
                         />
@@ -646,24 +720,28 @@ const YourEventPage = () => {
                       </Text>
                     </View>
                   )}
-
-                  <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={() => {
-                      setShowSuccessUI(false);
-                      resetTransactionState();
-                    }}
-                  >
-                    <LinearGradient
-                      colors={["#22c55e", "#16a34a"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.continueGradient}
+                  {eventStoredData?.image && (
+                    <TouchableOpacity
+                      style={styles.shareButton}
+                      onPress={handleShareOnTwitter}
                     >
-                      <Text style={styles.continueButtonText}>Continue</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                      <LinearGradient
+                        colors={["#000000", "#1a1a1a"]}
+                        style={styles.buttonGradient}
+                      >
+                        <View style={styles.shareButtonContent}>
+                          <Text style={styles.shareButtonText}>Share on</Text>
+                          <Image
+                            source={require("../../assets/images/logo-white.png")}
+                            style={styles.shareButtonImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </View>
+                <View style={{ height: 100 }} />
               </View>
             )}
             {/* Distance Warning UI - Moved above checkout process */}
@@ -743,7 +821,7 @@ const YourEventPage = () => {
             )}
 
             {/* Stepper - Only show after verification starts */}
-            {checkoutState !== "initial" && (
+            {transactionState !== "success" && checkoutState !== "initial" && (
               <View style={styles.stepperSection}>
                 <Text style={styles.stepperTitle}>Checkout Process</Text>
                 <Text style={styles.stepperSubtitle}>
@@ -956,7 +1034,7 @@ const YourEventPage = () => {
         {/* Transaction Progress or Action Button */}
         <View style={styles.bottomActionContainer}>
           {/* Success Message */}
-          {transactionState === "success" && (
+          {transactionState === "success" || eventStoredData?.txHash ? (
             <View style={styles.successContainer}>
               <Text style={styles.successText}>
                 🎉 Ticket used successfully!
@@ -964,7 +1042,7 @@ const YourEventPage = () => {
               <Text style={styles.successSubtext}>
                 You have been checked in to the event
               </Text>
-              {transactionHash && (
+              {(transactionHash || eventStoredData?.txHash) && (
                 <TouchableOpacity
                   style={styles.transactionLinkButton}
                   onPress={handleOpenTransactionURL}
@@ -975,7 +1053,7 @@ const YourEventPage = () => {
                 </TouchableOpacity>
               )}
             </View>
-          )}
+          ) : null}
 
           {/* Error Message */}
           {transactionState === "error" && (
@@ -985,37 +1063,39 @@ const YourEventPage = () => {
           )}
 
           {/* Start Verification Button - Only show when not in transaction state */}
-          {checkoutState === "initial" && transactionState === "idle" && (
-            <>
-              <TouchableOpacity
-                style={[
-                  styles.startVerificationButton,
-                  isVerifying && styles.startVerificationButtonDisabled,
-                ]}
-                onPress={handleVerifyEvent}
-                disabled={isVerifying}
-              >
-                <LinearGradient
-                  colors={["#22c55e", "#16a34a"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.startVerificationGradient}
+          {checkoutState === "initial" &&
+            transactionState === "idle" &&
+            !eventStoredData?.txHash && (
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.startVerificationButton,
+                    isVerifying && styles.startVerificationButtonDisabled,
+                  ]}
+                  onPress={handleVerifyEvent}
+                  disabled={isVerifying}
                 >
-                  {isVerifying ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.startVerificationButtonText}>
-                      Start Verification
-                    </Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={["#22c55e", "#16a34a"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.startVerificationGradient}
+                  >
+                    {isVerifying ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.startVerificationButtonText}>
+                        Start Verification
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
 
-              {verificationError && (
-                <Text style={styles.errorText}>{verificationError}</Text>
-              )}
-            </>
-          )}
+                {verificationError && (
+                  <Text style={styles.errorText}>{verificationError}</Text>
+                )}
+              </>
+            )}
         </View>
       </SafeAreaView>
 
@@ -1078,6 +1158,21 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  shareButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  shareButtonImage: {
+    width: 20,
+    height: 20,
+  },
+  shareButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
   scrollContent: {
     paddingHorizontal: 6,
@@ -1221,6 +1316,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+  },
+  shareButton: {
+    borderRadius: 30,
+    marginTop: 10,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   detailIcon: {
     fontSize: 20,

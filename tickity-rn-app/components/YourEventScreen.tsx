@@ -13,10 +13,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { formatUnits } from "viem";
 const { width } = Dimensions.get("window");
 
 const YourEventsScreen = () => {
-  const { data, isLoading, error } = useGetUserEvents();
+  const { data, isLoading, error, refetch } = useGetUserEvents();
   console.log("error", error);
   const router = useRouter();
 
@@ -94,7 +95,7 @@ const YourEventsScreen = () => {
                 <Text style={styles.detailLabel}>💰 Price</Text>
                 <Text style={styles.detailValue}>
                   {item.event.ticketPrices?.[0]
-                    ? `${item.event.ticketPrices[0]} USDT`
+                    ? `${formatUnits(item.event.ticketPrices[0], 6)} USDT`
                     : "TBA"}
                 </Text>
               </View>
@@ -159,6 +160,8 @@ const YourEventsScreen = () => {
                   </Text>
                 </View>
               )}
+              onRefresh={refetch}
+              refreshing={isLoading}
               keyExtractor={(item) => item.event.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.flatListContent}

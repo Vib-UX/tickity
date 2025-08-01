@@ -14,7 +14,7 @@ export interface EventWithTickets {
 
 const useGetUserEvents = () => {
   const account = useActiveAccount();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["userEvents", account?.address],
     queryFn: async () => {
       if (!account) {
@@ -71,7 +71,7 @@ const useGetUserEvents = () => {
     gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 };
 
 export default useGetUserEvents;

@@ -22,7 +22,7 @@ const EventsScreen = () => {
   useAutoConnect({
     client: client,
   });
-  const { data, isLoading, error } = useGetEvents();
+  const { data, isLoading, error, refetch } = useGetEvents();
   const router = useRouter();
 
   const renderEventItem = ({ item }: { item: Event }) => (
@@ -101,6 +101,8 @@ const EventsScreen = () => {
             <FlatList
               data={(data as any)?.eventCreateds || []}
               renderItem={renderEventItem}
+              onRefresh={refetch}
+              refreshing={isLoading}
               ListHeaderComponent={() => (
                 <View style={styles.eventsHeader}>
                   <Text style={styles.eventsTitle}>Discover Events</Text>

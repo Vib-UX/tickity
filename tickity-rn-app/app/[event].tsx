@@ -9,8 +9,9 @@ import useGetUSDT from "@/hooks/useGetUSDT";
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
 import useGetUserTickets from "@/hooks/useGetUserTickets";
 import { Event } from "@/types/event";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -53,7 +54,7 @@ const EventPage = () => {
 
   const { data, isLoading, error } = useGetEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
-
+  const router = useRouter();
   const id = eventId.split("-")[0];
 
   const eventContract = getContract({
@@ -135,6 +136,15 @@ const EventPage = () => {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: event?.name || `Event #${eventId?.slice(-6) || "N/A"}`,
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => {
+            router.back();
+          }}
+        >
+          <Ionicons name="arrow-back-outline" size={30} color={"#ffffff"} />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation, eventId, event]);
 
@@ -164,15 +174,33 @@ const EventPage = () => {
       setCurrentStep("Preparing transaction...");
 
       if (!event) {
+        console.error("Event not found when attempting purchase");
         throw new Error("Event not found");
       }
 
+      console.log("Preparing ticket purchase:", {
+        ticketType: selectedTicketIndex,
+        quantity: ticketQuantity,
+        pricePerTicket: selectedTicketPrice.toString(),
+        totalPrice: totalPrice.toString(),
+      });
+
       const approveAmount = selectedTicketPrice * BigInt(ticketQuantity);
+
+      console.log("Approving USDC spend:", {
+        amount: formatNumber(Number(approveAmount), 6),
+        spender: eventContract.address,
+      });
 
       const sendTx1 = approve({
         contract: usdcContract,
         amount: formatNumber(Number(approveAmount), 6),
         spender: eventContract.address,
+      });
+
+      console.log("Preparing purchase transaction for event contract:", {
+        method: "purchaseTicket",
+        ticketTypeIndex: selectedTicketIndex,
       });
 
       const sendTx2 = prepareContractCall({
@@ -181,9 +209,12 @@ const EventPage = () => {
           "function purchaseTicket(uint256 ticketTypeIndex) external payable",
         params: [BigInt(selectedTicketIndex)],
       });
+
+      console.log("Executing approval and purchase transactions...");
       await sendCalls({
         calls: [sendTx1, sendTx2],
       });
+      console.log("Purchase transactions completed successfully");
       refetchUSDTBalance();
       setCurrentStep("Finalizing your NFT tickets...");
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -354,7 +385,14 @@ const EventPage = () => {
         transactionHash={transactionHash}
         onRefetch={refetchUserTickets}
       />
-
+      {purchaseState === "loading" && (
+        <View style={styles.fullScreenTransactionOverlay}>
+          <TransactionProgress
+            currentStep={currentStep}
+            ticketQuantity={ticketQuantity}
+          />
+        </View>
+      )}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -801,12 +839,6 @@ const EventPage = () => {
       {/* Transaction Progress or Buy Ticket Button */}
       <View style={styles.bottomContainer}>
         {/* Transaction Progress */}
-        {purchaseState === "loading" && (
-          <TransactionProgress
-            currentStep={currentStep}
-            ticketQuantity={ticketQuantity}
-          />
-        )}
 
         {/* Success Message */}
         {purchaseState === "success" && (
@@ -886,6 +918,17 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  fullScreenTransactionOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
   },
   scrollContent: {
     paddingBottom: 100, // Reduced since ticket selection is now in main content
