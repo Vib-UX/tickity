@@ -56,7 +56,6 @@ export default function RobotSecond() {
       "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/RobotExpressive/RobotExpressive.glb"
       // require("../assets/res/small.glb")
     );
-    console.log("Model loaded:", modelScene);
 
     // Scale up the model to make it larger and position it at top center
     modelScene.scale.setScalar(1);

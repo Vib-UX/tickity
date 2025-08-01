@@ -50,8 +50,8 @@ const YourEventPage = () => {
   const [showAR, setShowAR] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("initial");
   const [currentStepperStep, setCurrentStepperStep] =
-    useState<StepperStep>("email");
-  const [emailVerified, setEmailVerified] = useState(false);
+    useState<StepperStep>("location");
+  const [emailVerified, setEmailVerified] = useState(true);
   const [locationVerified, setLocationVerified] = useState(false);
   const [selfieTaken, setSelfieTaken] = useState(false);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
@@ -62,6 +62,7 @@ const YourEventPage = () => {
   const [distanceToEvent, setDistanceToEvent] = useState<number | null>(null);
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
+  const [displayNftImage, setDisplayNftImage] = useState("");
   const { mutateAsync: sendCalls } = useSendCalls();
   const event = useMemo(() => {
     if (!data || !eventId) return null;
@@ -236,14 +237,18 @@ const YourEventPage = () => {
     }
   };
 
-  const handleSelfieCapture = () => {
+  const handleSelfieCapture = (uri: string, tmpfile?: string) => {
     // Simulate selfie capture
     setSelfieTaken(true);
     setShowAR(false);
-    setSelfieImage(
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop"
-    );
+    setSelfieImage(uri);
     setCurrentStepperStep("ready");
+
+    // Store file data for upload
+    if (tmpfile) {
+      setSelfieImage(tmpfile);
+      // You can store fileData in state if needed for upload
+    }
   };
 
   const eventContract = getContract({
@@ -251,6 +256,42 @@ const YourEventPage = () => {
     address: eventId,
     chain: chain,
   });
+
+  const uploadImage = async (uri: string) => {
+    if (!uri) {
+      console.log("No selfie image to upload");
+      return null;
+    }
+
+    try {
+      const formData = new FormData();
+
+      const localUri = `file://${uri}`;
+
+      formData.append("file", {
+        uri: localUri,
+        name: "selfie.jpg",
+        type: "image/jpeg",
+      } as any);
+
+      const uploadResponse = await fetch(
+        "https://42e13f0b6c67.ngrok-free.app/test-ghibli",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (uploadResponse.ok) {
+        const result = await uploadResponse.json();
+        return result.result;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      return null;
+    }
+  };
 
   const handleCompleteCheckout = async () => {
     try {
@@ -262,6 +303,19 @@ const YourEventPage = () => {
       if (!event) {
         throw new Error("Event not found");
       }
+
+      // Upload selfie image if available
+      if (selfieImage) {
+        setCurrentStep("Uploading check-in photo...");
+        const imageUrl = await uploadImage(selfieImage);
+        setDisplayNftImage(imageUrl);
+        setTransactionState("success");
+        setTransactionError("");
+        setShowNFTModal(true);
+        return;
+      }
+
+      setCurrentStep("Processing transaction...");
 
       const sendTx2 = prepareContractCall({
         contract: eventContract,
@@ -389,8 +443,9 @@ const YourEventPage = () => {
   if (showAR) {
     return (
       <GLVIEWAPP
-        onClose={() => setShowAR(false)}
-        onComplete={handleSelfieCapture}
+        onComplete={(uri, tmpfile) => {
+          handleSelfieCapture(uri, tmpfile);
+        }}
       />
     );
   }
@@ -440,7 +495,7 @@ const YourEventPage = () => {
         <NFTModal
           visible={showNFTModal}
           onClose={handleCloseNFTModal}
-          nftImage={event?.image}
+          nftImage={displayNftImage}
           eventName={event?.name}
           ticketQuantity={1}
           transactionHash={transactionHash}
@@ -572,6 +627,25 @@ const YourEventPage = () => {
                       <Text style={styles.successDetailValue}>Active</Text>
                     </View>
                   </View>
+
+                  {/* Selfie Image Display */}
+                  {selfieImage && (
+                    <View style={styles.selfieSection}>
+                      <Text style={styles.selfieTitle}>
+                        Your Check-in Photo
+                      </Text>
+                      <View style={styles.selfieImageContainer}>
+                        <Image
+                          source={{ uri: selfieImage }}
+                          style={styles.selfieImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                      <Text style={styles.selfieCaption}>
+                        This photo was taken during your check-in process
+                      </Text>
+                    </View>
+                  )}
 
                   <TouchableOpacity
                     style={styles.continueButton}
@@ -788,6 +862,24 @@ const YourEventPage = () => {
                           <Text style={styles.stepButtonText}>Take Selfie</Text>
                         </TouchableOpacity>
                       )}
+                      {/* Selfie Image Display */}
+                      {selfieImage && (
+                        <View style={styles.selfieSection}>
+                          <Text style={styles.selfieTitle}>
+                            Your Check-in Photo
+                          </Text>
+                          <View style={styles.selfieImageContainer}>
+                            <Image
+                              source={{ uri: selfieImage }}
+                              style={styles.selfieImage}
+                              resizeMode="cover"
+                            />
+                          </View>
+                          <Text style={styles.selfieCaption}>
+                            This photo was taken during your check-in process
+                          </Text>
+                        </View>
+                      )}
                       {selfieTaken && (
                         <Text style={styles.stepCompleted}>
                           ✓ Selfie Captured
@@ -863,11 +955,6 @@ const YourEventPage = () => {
         </ScrollView>
         {/* Transaction Progress or Action Button */}
         <View style={styles.bottomActionContainer}>
-          {/* Transaction Progress */}
-          {transactionState === "loading" && (
-            <TransactionProgress currentStep={currentStep} ticketQuantity={1} />
-          )}
-
           {/* Success Message */}
           {transactionState === "success" && (
             <View style={styles.successContainer}>
@@ -909,13 +996,13 @@ const YourEventPage = () => {
                 disabled={isVerifying}
               >
                 <LinearGradient
-                  colors={["#667eea", "#764ba2"]}
+                  colors={["#22c55e", "#16a34a"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.startVerificationGradient}
                 >
                   {isVerifying ? (
-                    <ActivityIndicator size="large" color="#ffffff" />
+                    <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
                     <Text style={styles.startVerificationButtonText}>
                       Start Verification
@@ -931,6 +1018,50 @@ const YourEventPage = () => {
           )}
         </View>
       </SafeAreaView>
+
+      {/* Full Screen Transaction Progress Overlay */}
+      {transactionState === "loading" && (
+        <View style={styles.fullScreenTransactionOverlay}>
+          <TransactionProgress currentStep={currentStep} ticketQuantity={1} />
+        </View>
+      )}
+
+      {/* Full Screen Error Overlay */}
+      {transactionState === "error" && (
+        <View style={styles.fullScreenErrorOverlay}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIconContainer}>
+              <Text style={styles.errorIcon}>❌</Text>
+            </View>
+            <Text style={styles.errorTitle}>Transaction Failed</Text>
+            <Text style={styles.errorDescription}>
+              {transactionError ||
+                "An unexpected error occurred during the transaction."}
+            </Text>
+
+            {transactionHash && (
+              <TouchableOpacity
+                style={styles.transactionLinkButton}
+                onPress={handleOpenTransactionURL}
+              >
+                <Text style={styles.transactionLinkText}>
+                  View Transaction ↗
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.closeErrorButton}
+              onPress={() => {
+                setTransactionState("idle");
+                setTransactionError("");
+              }}
+            >
+              <Text style={styles.closeErrorButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </LinearGradient>
   );
 };
@@ -1828,13 +1959,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   startVerificationGradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 32,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: "center",
   },
   startVerificationButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -2145,5 +2276,116 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
     letterSpacing: 0.5,
+  },
+  // Selfie Image Styles
+  selfieSection: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  selfieTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  selfieImageContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "rgba(52, 199, 89, 0.3)",
+    shadowColor: "#34C759",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  selfieImage: {
+    width: "100%",
+    height: "100%",
+  },
+  selfieCaption: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 16,
+  },
+  // Full Screen Transaction Overlay
+  fullScreenTransactionOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  // Full Screen Error Overlay Styles
+  fullScreenErrorOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  errorContent: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    maxWidth: 350,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  errorIconContainer: {
+    marginBottom: 20,
+  },
+  errorIcon: {
+    fontSize: 64,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#ef4444",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  errorDescription: {
+    fontSize: 16,
+    color: "#CCCCCC",
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 24,
+  },
+  closeErrorButton: {
+    backgroundColor: "#ef4444",
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    shadowColor: "#ef4444",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  closeErrorButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "600",
   },
 });

@@ -4,10 +4,8 @@
 // @refresh reset
 
 import { Camera } from "expo-camera";
-import * as MediaLibrary from "expo-media-library";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   Image,
   StyleSheet,
@@ -20,18 +18,9 @@ import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { loadAsync, Renderer, THREE } from "expo-three";
 import OrbitControlsView from "expo-three-orbit-controls";
 
-export default function Robot({
-  onClose,
-  onComplete,
-}: {
-  onClose: () => void;
-  onComplete: () => void;
-}) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [actions, setActions] = useState<Record<string, any>>({});
+export default function Robot({ onComplete }: { onComplete: () => void }) {
   const [show3DModel, setShow3DModel] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [cameraType, setCameraType] = useState<"front" | "back">("back");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isCameraSwitching, setIsCameraSwitching] = useState(false);
   const [isAssetOpening, setIsAssetOpening] = useState(false);
@@ -76,12 +65,10 @@ export default function Robot({
   }, [show3DModel]);
 
   const startScanAnimation = () => {
-    // Reset scan animation
     scanAnimationRef.setValue(0);
     setScanProgress(0);
     setAssetLoadProgress(0);
 
-    // Animate scan line from top to bottom
     Animated.timing(scanAnimationRef, {
       toValue: 1,
       duration: 3000,
@@ -126,105 +113,6 @@ export default function Robot({
     }, 50);
   };
 
-  const toggleCameraType = () => {
-    setIsCameraSwitching(true);
-    setCameraType((current) => (current === "back" ? "front" : "back"));
-
-    // Add a small delay to allow camera to switch smoothly
-    setTimeout(() => {
-      setIsCameraSwitching(false);
-    }, 300);
-  };
-
-  const capturePhoto = async () => {
-    if (isCapturing) return;
-
-    setIsCapturing(true);
-    console.log("Photo capture button pressed!");
-
-    try {
-      // Request media library permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please grant media library access to save photos."
-        );
-        return;
-      }
-
-      // Try multiple react-native-view-shot methods
-      try {
-        let screenshotUri = null;
-
-        // Method 1: Try captureScreen (captures entire screen)
-        try {
-          const { captureScreen } = require("react-native-view-shot");
-          screenshotUri = await captureScreen({
-            format: "png",
-            quality: 1,
-            result: "tmpfile",
-          });
-          console.log("Screenshot captured via captureScreen", screenshotUri);
-        } catch (screenError) {
-          console.warn("captureScreen failed:", screenError);
-
-          // Method 2: Try captureRef with container
-          try {
-            const { captureRef } = require("react-native-view-shot");
-            screenshotUri = await captureRef(containerRef, {
-              format: "png",
-              quality: 1,
-              result: "tmpfile",
-            });
-            console.log("Screenshot captured via captureRef");
-          } catch (refError) {
-            console.warn("captureRef failed:", refError);
-
-            // Method 3: Try captureRef with GL view
-            try {
-              const { captureRef } = require("react-native-view-shot");
-              screenshotUri = await captureRef(glViewRef, {
-                format: "png",
-                quality: 1,
-                result: "tmpfile",
-              });
-              console.log("Screenshot captured via GL view");
-            } catch (glError) {
-              console.warn("GL capture failed:", glError);
-              throw new Error("All react-native-view-shot methods failed");
-            }
-          }
-        }
-
-        if (screenshotUri) {
-          setCapturedImageUri(screenshotUri);
-          console.log("Screenshot captured and displayed");
-          // Don't call onComplete here - let user decide in modal
-        } else {
-          throw new Error("No screenshot URI generated");
-        }
-      } catch (error) {
-        console.error("Screenshot error:", error);
-
-        Alert.alert(
-          "Photo Capture Failed",
-          "Unable to capture photo. Please try again.",
-          [{ text: "OK" }]
-        );
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to take photo. Please try again.");
-      console.error("Photo capture error:", error);
-    } finally {
-      setIsCapturing(false);
-    }
-  };
-
-  const handleBackPress = () => {
-    onClose();
-  };
-
   if (hasPermission === null) {
     return (
       <View style={styles.container}>
@@ -241,8 +129,6 @@ export default function Robot({
   }
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
-    setIsLoading(true);
-
     const pixelStorei = gl.pixelStorei.bind(gl);
     gl.pixelStorei = function (...args) {
       const [parameter] = args;
@@ -275,7 +161,6 @@ export default function Robot({
 
     const clock = new THREE.Clock();
 
-    // Minimal lighting to make the robot visible
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
@@ -283,25 +168,15 @@ export default function Robot({
     directionalLight.position.set(1, 1, 1);
     scene.add(directionalLight);
 
-    // const { scene: modelScene } = await loadAsync(
-    //   require("../assets/res/eth-link.glb")
-    // );
     const { scene: modelScene } = await loadAsync(
       "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/RobotExpressive/RobotExpressive.glb"
     );
-    // load GLB model using GLTFLoader like in RN.tsx
-
-    console.log("Model loaded:", modelScene);
-
-    // Scale up the model to make it larger and position it at top center
     modelScene.scale.setScalar(1);
     modelScene.position.set(0, 2, 0); // Position model higher up
     scene.add(modelScene);
 
-    // Store initial positions for animation
     const initialY = 2;
     const initialX = 0;
-    const initialScale = 3;
 
     function animate() {
       const dt = clock.getDelta();
@@ -318,26 +193,18 @@ export default function Robot({
       gl.endFrameEXP();
     }
     animate();
-
-    setIsLoading(false);
+    // Call onComplete when the model is loaded and animation starts
+    onComplete();
   };
 
   return (
     <View ref={containerRef} style={styles.container}>
-      {/* Camera switching overlay */}
       {isCameraSwitching && (
         <View style={styles.cameraSwitchingOverlay}>
           <Text style={styles.cameraSwitchingText}>Switching camera...</Text>
         </View>
       )}
-
-      {/* Overlay Content */}
       <View style={styles.overlayContainer}>
-        {/* Back Button - Top Left */}
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-
         {!show3DModel ? (
           <>
             {/* Scanning overlay - show before 3D model */}
@@ -400,25 +267,6 @@ export default function Robot({
           </Animated.View>
         )}
 
-        {/* Camera Control Buttons - Top Right */}
-        <View style={styles.topRightButtons}>
-          <TouchableOpacity
-            style={styles.cameraButton}
-            onPress={toggleCameraType}
-          >
-            <Text style={styles.buttonText}>
-              {cameraType === "back" ? "Front" : "Back"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.captureButton} onPress={capturePhoto}>
-            <Text style={styles.buttonText}>
-              {isCapturing ? "Capturing..." : "📸"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Captured image modal */}
         {capturedImageUri && (
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
@@ -532,7 +380,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.3)", // Semi-transparent background
   },
   modelView: {
     flex: 1,
