@@ -5,10 +5,66 @@ const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
 const app = express();
 const PORT = process.env.PORT || 3000;
 const upload = multer({ dest: "uploads/" });
 const openai = new OpenAI();
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "dudyr8sau",
+  api_key: process.env.CLOUDINARY_API_KEY || "795874972645181",
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Helper function to upload base64 image to Cloudinary with optimization
+async function uploadBase64ToCloudinary(
+  base64Data,
+  folder = "images",
+  publicId = null,
+  options = {}
+) {
+  try {
+    const uploadResponse = await cloudinary.uploader.upload(base64Data, {
+      folder: folder,
+      public_id: publicId || `img_${Date.now()}`,
+      overwrite: true,
+      fetch_format: "auto",
+      quality: "auto",
+      ...options,
+    });
+
+    // Generate optimized URL
+    const optimizedUrl = cloudinary.url(uploadResponse.public_id, {
+      fetch_format: "auto",
+      quality: "auto",
+    });
+
+    // Generate auto-crop URL for square aspect ratio
+    const autoCropUrl = cloudinary.url(uploadResponse.public_id, {
+      crop: "auto",
+      gravity: "auto",
+      width: 500,
+      height: 500,
+    });
+
+    return {
+      success: true,
+      url: uploadResponse.secure_url,
+      optimized_url: optimizedUrl,
+      auto_crop_url: autoCropUrl,
+      public_id: uploadResponse.public_id,
+      response: uploadResponse,
+    };
+  } catch (error) {
+    console.error("Cloudinary upload error:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
 
 // Middleware to parse JSON
 app.use(cors());
@@ -463,20 +519,53 @@ app.post("/analyze-image-ghibli", upload.single("file"), async (req, res) => {
     // gpt-image-1 returns b64_json instead of URL
     const image_base64 = imgResponse.data[0].b64_json;
 
-    // Save the image to a file with timestamp
-    const timestamp = Date.now();
-    const filename = `ghibli_${timestamp}.jpeg`;
-    const image_bytes = Buffer.from(image_base64, "base64");
-    fs.writeFileSync(filename, image_bytes);
+    // Upload to Cloudinary with optimization
+    const cloudinaryResult = await uploadBase64ToCloudinary(
+      `data:image/jpeg;base64,${image_base64}`,
+      "ghibli-images",
+      `ghibli_${Date.now()}`,
+      {
+        transformation: [
+          { fetch_format: "auto", quality: "auto" },
+          { crop: "auto", gravity: "auto" },
+        ],
+      }
+    );
 
-    console.log(`Image saved as: ${filename}`);
+    if (cloudinaryResult.success) {
+      console.log("Image uploaded to Cloudinary:", cloudinaryResult.url);
+      console.log("Optimized URL:", cloudinaryResult.optimized_url);
+      console.log("Auto-crop URL:", cloudinaryResult.auto_crop_url);
 
-    // Return both the base64 data and the filename
-    res.json({
-      result: `data:image/jpeg;base64,${image_base64}`,
-      filename: filename,
-      prompt: imgPrompt,
-    });
+      // Return the Cloudinary URLs and other data
+      res.json({
+        result: cloudinaryResult.url,
+        optimized_url: cloudinaryResult.optimized_url,
+        auto_crop_url: cloudinaryResult.auto_crop_url,
+        filename: cloudinaryResult.public_id,
+        prompt: imgPrompt,
+        cloudinary_id: cloudinaryResult.public_id,
+        original_base64: `data:image/jpeg;base64,${image_base64}`,
+      });
+    } else {
+      console.error("Cloudinary upload failed:", cloudinaryResult.error);
+
+      // Fallback: return base64 if Cloudinary fails
+      const timestamp = Date.now();
+      const filename = `ghibli_${timestamp}.jpeg`;
+      const image_bytes = Buffer.from(image_base64, "base64");
+      fs.writeFileSync(filename, image_bytes);
+
+      console.log(`Image saved locally as: ${filename}`);
+
+      res.json({
+        result: `data:image/jpeg;base64,${image_base64}`,
+        filename: filename,
+        prompt: imgPrompt,
+        error: "Cloudinary upload failed, using base64 fallback",
+        cloudinary_error: cloudinaryResult.error,
+      });
+    }
   } catch (err) {
     // Clean up file if it exists and there was an error
     if (fs.existsSync(imagePath)) {
@@ -486,6 +575,108 @@ app.post("/analyze-image-ghibli", upload.single("file"), async (req, res) => {
     res.status(500).json({
       error: "Failed to analyze image",
       details: err.response?.data?.error?.message || err.message,
+    });
+  }
+});
+
+// Endpoint to convert base64 image to Cloudinary URL with optimization
+app.post("/convert-base64-to-url", async (req, res) => {
+  try {
+    const {
+      base64Data,
+      folder = "images",
+      publicId = null,
+      options = {},
+    } = req.body;
+
+    if (!base64Data) {
+      return res.status(400).json({
+        error: "base64Data is required in request body",
+      });
+    }
+
+    const cloudinaryResult = await uploadBase64ToCloudinary(
+      base64Data,
+      folder,
+      publicId,
+      options
+    );
+
+    if (cloudinaryResult.success) {
+      res.json({
+        success: true,
+        url: cloudinaryResult.url,
+        optimized_url: cloudinaryResult.optimized_url,
+        auto_crop_url: cloudinaryResult.auto_crop_url,
+        public_id: cloudinaryResult.public_id,
+        folder: folder,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: cloudinaryResult.error,
+      });
+    }
+  } catch (error) {
+    console.error("Error converting base64 to URL:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to convert base64 to URL",
+      details: error.message,
+    });
+  }
+});
+
+// Endpoint for image transformations and optimizations
+app.post("/transform-image", async (req, res) => {
+  try {
+    const { publicId, transformations = {} } = req.body;
+
+    if (!publicId) {
+      return res.status(400).json({
+        error: "publicId is required in request body",
+      });
+    }
+
+    // Generate optimized URL
+    const optimizedUrl = cloudinary.url(publicId, {
+      fetch_format: "auto",
+      quality: "auto",
+      ...transformations,
+    });
+
+    // Generate auto-crop URL for square aspect ratio
+    const autoCropUrl = cloudinary.url(publicId, {
+      crop: "auto",
+      gravity: "auto",
+      width: 500,
+      height: 500,
+      ...transformations,
+    });
+
+    // Generate thumbnail URL
+    const thumbnailUrl = cloudinary.url(publicId, {
+      width: 150,
+      height: 150,
+      crop: "fill",
+      gravity: "auto",
+      ...transformations,
+    });
+
+    res.json({
+      success: true,
+      original_url: cloudinary.url(publicId),
+      optimized_url: optimizedUrl,
+      auto_crop_url: autoCropUrl,
+      thumbnail_url: thumbnailUrl,
+      public_id: publicId,
+    });
+  } catch (error) {
+    console.error("Error transforming image:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to transform image",
+      details: error.message,
     });
   }
 });
