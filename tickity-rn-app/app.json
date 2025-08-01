@@ -8,11 +8,6 @@
     "scheme": "tickity",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cryptokrotus.tickity",
@@ -36,15 +31,11 @@
       "intentFilters": [
         {
           "action": "android.intent.action.MAIN",
-          "category": [
-            "android.intent.category.LAUNCHER"
-          ]
+          "category": ["android.intent.category.LAUNCHER"]
         },
         {
           "action": "android.intent.action.MAIN",
-          "category": [
-            "android.intent.category.LAUNCHER"
-          ]
+          "category": ["android.intent.category.LAUNCHER"]
         }
       ]
     },
@@ -56,6 +47,15 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 100,
+          "resizeMode": "contain",
+          "backgroundColor": "#000"
+        }
+      ],
       [
         "expo-build-properties",
         {

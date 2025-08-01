@@ -107,7 +107,11 @@ function NFTModal({
               <Text style={styles.cardTitle}>Event Details</Text>
               <View style={styles.eventDetailRow}>
                 <Text style={styles.eventDetailLabel}>Event:</Text>
-                <Text style={styles.eventDetailValue}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={styles.eventDetailValue}
+                >
                   {eventName || "Unknown Event"}
                 </Text>
               </View>
@@ -322,6 +326,7 @@ const styles = StyleSheet.create({
   eventDetailValue: {
     fontSize: 14,
     color: "#ffffff",
+    maxWidth: 200,
     fontWeight: "600",
   },
   transactionContainer: {

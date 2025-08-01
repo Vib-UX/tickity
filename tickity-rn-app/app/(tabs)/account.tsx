@@ -1,6 +1,6 @@
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -51,7 +51,6 @@ let isLoggedIn = false;
 
 export default function AccountScreen() {
   const account = useActiveAccount();
-  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const { balance: usdtBalance, isLoading: isLoadingBalance } =
     useGetUSDTBalance();
 
@@ -64,19 +63,20 @@ export default function AccountScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={["#000000", "#1a1a1a", "#2d2d2d"]}
-        style={styles.gradient}
-      >
+    <LinearGradient
+      colors={["#000000", "#1a1a1a", "#2d2d2d"]}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Account</Text>
             <Text style={styles.headerSubtitle}>
-              Manage your wallet and view transaction history
+              Manage your wallet and preferences
             </Text>
           </View>
 
@@ -110,25 +110,6 @@ export default function AccountScreen() {
                     formatBalance(usdtBalance)
                   )}
                 </Text>
-              </View>
-
-              {/* Transaction Summary Card */}
-              <View style={styles.transactionSummaryCard}>
-                <View style={styles.transactionSummaryHeader}>
-                  <Text style={styles.transactionSummaryIcon}>📊</Text>
-                  <Text style={styles.transactionSummaryTitle}>
-                    Transaction History
-                  </Text>
-                </View>
-                <View style={styles.transactionSummaryContent}>
-                  <Text style={styles.transactionCount}></Text>
-                  <TouchableOpacity
-                    style={styles.viewHistoryButton}
-                    onPress={() => setShowTransactionHistory(true)}
-                  >
-                    <Text style={styles.viewHistoryButtonText}>View All</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               {/* Quick Actions */}
@@ -209,15 +190,14 @@ export default function AccountScreen() {
             </View>
           )}
         </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
   },
   gradient: {
     flex: 1,
@@ -225,31 +205,35 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingTop: 8,
+    paddingBottom: 20,
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: "rgba(255, 255, 255, 0.7)",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   accountContainer: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 14,
   },
   walletCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -288,7 +272,7 @@ const styles = StyleSheet.create({
   balanceCard: {
     backgroundColor: "rgba(34, 197, 94, 0.1)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(34, 197, 94, 0.2)",
   },
@@ -312,56 +296,10 @@ const styles = StyleSheet.create({
     color: "#22c55e",
     fontWeight: "700",
   },
-  transactionSummaryCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  transactionSummaryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  transactionSummaryIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  transactionSummaryTitle: {
-    fontSize: 16,
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  transactionSummaryContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  transactionCount: {
-    fontSize: 18,
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  viewHistoryButton: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.3)",
-  },
-  viewHistoryButtonText: {
-    fontSize: 12,
-    color: "#3b82f6",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
   quickActionsCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -369,7 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   quickActionsGrid: {
     flexDirection: "row",
@@ -399,7 +337,7 @@ const styles = StyleSheet.create({
   walletConnectionCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },

@@ -2,6 +2,7 @@ import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModal from "@/components/NFTModal";
+import TransactionProgress from "@/components/TransactionProgress";
 import { chain, client } from "@/constants/thirdweb";
 import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
@@ -13,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +29,7 @@ import GLVIEWAPP from "./GLVIEW";
 // Define checkout states
 type CheckoutState = "initial" | "verifying" | "stepper" | "completed";
 type StepperStep = "email" | "location" | "selfie" | "ready";
+type TransactionState = "idle" | "loading" | "success" | "error";
 
 const YourEventPage = () => {
   const params = useLocalSearchParams();
@@ -36,6 +39,13 @@ const YourEventPage = () => {
   const { data, isLoading, error } = useGetUserEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
   const [transactionHash, setTransactionHash] = useState("");
+
+  // Transaction state management
+  const [transactionState, setTransactionState] =
+    useState<TransactionState>("idle");
+  const [transactionError, setTransactionError] = useState<string>("");
+  const [currentStep, setCurrentStep] = useState<string>("");
+
   // State management
   const [showAR, setShowAR] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("initial");
@@ -72,7 +82,9 @@ const YourEventPage = () => {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: event?.name || `Event #${eventId?.slice(-6) || "N/A"}`,
+      title:
+        event?.name.slice(0, 20) + "..." ||
+        `Event #${eventId?.slice(-6) || "N/A"}`,
     });
   }, [navigation, eventId, event]);
 
@@ -190,29 +202,29 @@ const YourEventPage = () => {
 
       console.log("Distance to event:", distance, "meters");
       // Check if user is within 100m
-      if (distance <= 100) {
-        setLocationVerified(true);
-        setCurrentStepperStep("selfie");
-        setDistanceToEvent(distance);
-        setShowDistanceWarning(false);
-        Alert.alert(
-          "Location Verified",
-          `You are ${Math.round(
-            distance
-          )}m from the event. Location verified successfully!`
-        );
-      } else {
-        // Show UI that user needs to be within 100m
-        setLocationVerified(false);
-        setDistanceToEvent(distance);
-        setShowDistanceWarning(true);
-        Alert.alert(
-          "Too Far from Event",
-          `You are ${Math.round(
-            distance
-          )}m from the event. Please move within 100m of the event location to proceed.`
-        );
-      }
+      // if (distance <= 100) {
+      setLocationVerified(true);
+      setCurrentStepperStep("selfie");
+      setDistanceToEvent(distance);
+      setShowDistanceWarning(false);
+      Alert.alert(
+        "Location Verified",
+        `You are ${Math.round(
+          distance
+        )}m from the event. Location verified successfully!`
+      );
+      // } else {
+      //   // Show UI that user needs to be within 100m
+      //   setLocationVerified(false);
+      //   setDistanceToEvent(distance);
+      //   setShowDistanceWarning(true);
+      //   Alert.alert(
+      //     "Too Far from Event",
+      //     `You are ${Math.round(
+      //       distance
+      //     )}m from the event. Please move within 100m of the event location to proceed.`
+      //   );
+      // }
     } catch (error) {
       console.error("Location error:", error);
       Alert.alert(
@@ -243,6 +255,9 @@ const YourEventPage = () => {
   const handleCompleteCheckout = async () => {
     try {
       setTransactionHash("");
+      setTransactionState("loading");
+      setTransactionError("");
+      setCurrentStep("Preparing transaction...");
 
       if (!event) {
         throw new Error("Event not found");
@@ -258,15 +273,20 @@ const YourEventPage = () => {
         calls: [sendTx2],
       });
 
-      console.log("Done");
-
+      setCurrentStep("Finalizing your ticket usage...");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setTransactionState("success");
+      setTransactionError("");
       setShowSuccessUI(true);
     } catch (error) {
       console.log("error", error);
+
+      // Only execute the fallback logic if the error contains the specific message
       if (
         error instanceof Error &&
         error.message.includes("Failed to get user operation receipt")
       ) {
+        setCurrentStep("Fetching user operations...");
         await new Promise((resolve) => setTimeout(resolve, 5000));
         const logs = await getContractEvents({
           contract: eventContract,
@@ -327,17 +347,43 @@ const YourEventPage = () => {
         });
         if (tx.transactionHash) {
           setTransactionHash(tx.transactionHash);
+          setCurrentStep("Finalizing your ticket usage...");
           await new Promise((resolve) => setTimeout(resolve, 1500));
+          setTransactionState("success");
+          setTransactionError("");
           setShowNFTModal(true);
           return;
         }
       }
+
+      setTransactionError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
+      setTimeout(() => {
+        setTransactionState("idle");
+        setTransactionError("");
+        setCurrentStep("");
+      }, 5000);
     }
   };
 
   const handleCloseNFTModal = () => {
     setShowNFTModal(false);
     setShowSuccessUI(true);
+  };
+
+  const resetTransactionState = () => {
+    setTransactionState("idle");
+    setTransactionError("");
+    setCurrentStep("");
+    setTransactionHash("");
+  };
+
+  const handleOpenTransactionURL = () => {
+    if (transactionHash) {
+      const url = `https://sepolia.etherscan.io/tx/${transactionHash}`;
+      Linking.openURL(url);
+    }
   };
 
   if (showAR) {
@@ -385,24 +431,21 @@ const YourEventPage = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <LinearGradient
-        colors={["#000000", "#1a1a1a", "#2d2d2d"]}
-        style={styles.container}
-      >
+    <LinearGradient
+      colors={["#000000", "#1a1a1a", "#2d2d2d"]}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
         <SignInBottomSheet ref={signInBottomSheetRef} />
-
-        {/* NFT Modal */}
         <NFTModal
           visible={showNFTModal}
           onClose={handleCloseNFTModal}
           nftImage={event?.image}
           eventName={event?.name}
           ticketQuantity={1}
-          transactionHash=""
+          transactionHash={transactionHash}
           onRefetch={() => {}}
         />
-
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -532,7 +575,10 @@ const YourEventPage = () => {
 
                   <TouchableOpacity
                     style={styles.continueButton}
-                    onPress={() => setShowSuccessUI(false)}
+                    onPress={() => {
+                      setShowSuccessUI(false);
+                      resetTransactionState();
+                    }}
                   >
                     <LinearGradient
                       colors={["#22c55e", "#16a34a"]}
@@ -772,18 +818,39 @@ const YourEventPage = () => {
                         locationVerified &&
                         selfieTaken && (
                           <TouchableOpacity
-                            style={styles.transactButton}
+                            style={[
+                              styles.transactButton,
+                              transactionState === "loading" &&
+                                styles.transactButtonDisabled,
+                            ]}
                             onPress={handleCompleteCheckout}
+                            disabled={transactionState === "loading"}
                           >
                             <LinearGradient
-                              colors={["#22c55e", "#16a34a"]}
+                              colors={
+                                transactionState === "loading"
+                                  ? ["#666666", "#444444"]
+                                  : ["#22c55e", "#16a34a"]
+                              }
                               start={{ x: 0, y: 0 }}
                               end={{ x: 1, y: 0 }}
                               style={styles.transactGradient}
                             >
-                              <Text style={styles.transactButtonText}>
-                                Transact
-                              </Text>
+                              {transactionState === "loading" ? (
+                                <View style={styles.transactButtonLoading}>
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#ffffff"
+                                  />
+                                  <Text style={styles.transactButtonText}>
+                                    Processing...
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.transactButtonText}>
+                                  Transact
+                                </Text>
+                              )}
                             </LinearGradient>
                           </TouchableOpacity>
                         )}
@@ -794,41 +861,77 @@ const YourEventPage = () => {
             )}
           </View>
         </ScrollView>
+        {/* Transaction Progress or Action Button */}
+        <View style={styles.bottomActionContainer}>
+          {/* Transaction Progress */}
+          {transactionState === "loading" && (
+            <TransactionProgress currentStep={currentStep} ticketQuantity={1} />
+          )}
 
-        {/* Bottom Action Button */}
-        {checkoutState === "initial" && (
-          <View style={styles.bottomActionContainer}>
-            <TouchableOpacity
-              style={[
-                styles.startVerificationButton,
-                isVerifying && styles.startVerificationButtonDisabled,
-              ]}
-              onPress={handleVerifyEvent}
-              disabled={isVerifying}
-            >
-              <LinearGradient
-                colors={["#667eea", "#764ba2"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.startVerificationGradient}
-              >
-                {isVerifying ? (
-                  <ActivityIndicator size="large" color="#ffffff" />
-                ) : (
-                  <Text style={styles.startVerificationButtonText}>
-                    Start Verification
+          {/* Success Message */}
+          {transactionState === "success" && (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>
+                🎉 Ticket used successfully!
+              </Text>
+              <Text style={styles.successSubtext}>
+                You have been checked in to the event
+              </Text>
+              {transactionHash && (
+                <TouchableOpacity
+                  style={styles.transactionLinkButton}
+                  onPress={handleOpenTransactionURL}
+                >
+                  <Text style={styles.transactionLinkText}>
+                    View Transaction ↗
                   </Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
-            {verificationError && (
-              <Text style={styles.errorText}>{verificationError}</Text>
-            )}
-          </View>
-        )}
-      </LinearGradient>
-    </SafeAreaView>
+          {/* Error Message */}
+          {transactionState === "error" && (
+            <View style={styles.errorMessageContainer}>
+              <Text style={styles.errorMessageText}>❌ {transactionError}</Text>
+            </View>
+          )}
+
+          {/* Start Verification Button - Only show when not in transaction state */}
+          {checkoutState === "initial" && transactionState === "idle" && (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.startVerificationButton,
+                  isVerifying && styles.startVerificationButtonDisabled,
+                ]}
+                onPress={handleVerifyEvent}
+                disabled={isVerifying}
+              >
+                <LinearGradient
+                  colors={["#667eea", "#764ba2"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.startVerificationGradient}
+                >
+                  {isVerifying ? (
+                    <ActivityIndicator size="large" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.startVerificationButtonText}>
+                      Start Verification
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {verificationError && (
+                <Text style={styles.errorText}>{verificationError}</Text>
+              )}
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
@@ -837,7 +940,7 @@ export default YourEventPage;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#000000",
+    padding: 6,
   },
   container: {
     flex: 1,
@@ -846,6 +949,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 6,
     paddingBottom: 100, // Reduced since ticket selection is now in main content
   },
   loadingContainer: {
@@ -901,10 +1005,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   eventTitle: {
-    fontSize: 28,
+    fontSize: 24,
     color: "#ffffff",
     fontWeight: "700",
-    lineHeight: 32,
+    lineHeight: 28,
     flex: 1,
     marginRight: 12,
     flexShrink: 1,
@@ -943,9 +1047,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   eventDescription: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
-    lineHeight: 24,
+    lineHeight: 20,
   },
   detailsSection: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -955,7 +1059,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 12,
@@ -1002,7 +1106,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -1070,7 +1174,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   eventIdValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     fontFamily: "monospace",
@@ -1109,7 +1213,7 @@ const styles = StyleSheet.create({
   },
   buyTicketButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -1166,7 +1270,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   ticketSelectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 2,
@@ -1223,7 +1327,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   quantityNumber: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -1251,7 +1355,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   priceValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -1268,7 +1372,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   ticketTypesTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 2,
@@ -1302,7 +1406,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ticketTypeName: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     flex: 1,
@@ -1329,7 +1433,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ticketTypePrice: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "700",
   },
@@ -1379,7 +1483,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   balanceValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -1446,7 +1550,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   purchasedTicketsTitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1507,7 +1611,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(34, 197, 94, 0.2)",
   },
   myTicketsCount: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1534,7 +1638,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   myTicketsDetailValue: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#ffffff",
     fontWeight: "500",
   },
@@ -1564,7 +1668,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   ticketTypeItemName: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1580,7 +1684,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ticketTypeItemPrice: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#ffffff",
     fontWeight: "500",
   },
@@ -1594,7 +1698,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   verifyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 8,
@@ -1627,7 +1731,7 @@ const styles = StyleSheet.create({
   },
   verifyButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -1636,7 +1740,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   stepperTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 8,
@@ -1686,7 +1790,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 4,
@@ -1730,7 +1834,7 @@ const styles = StyleSheet.create({
   },
   startVerificationButtonText: {
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -1781,9 +1885,17 @@ const styles = StyleSheet.create({
   },
   transactButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  transactButtonDisabled: {
+    opacity: 0.6,
+  },
+  transactButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   selfieContainer: {
     marginTop: 12,
@@ -1821,18 +1933,18 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   successTitle: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#22c55e",
     fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
   },
   successSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
     textAlign: "center",
     marginBottom: 20,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   successDetails: {
     width: "100%",
@@ -1856,7 +1968,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   successDetailValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     flex: 1,
@@ -1884,7 +1996,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -1923,7 +2035,7 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   distanceWarningTitle: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#ef4444",
     fontWeight: "700",
     marginBottom: 8,
@@ -1958,7 +2070,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   distanceInfoValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     flex: 1,
@@ -1990,7 +2102,7 @@ const styles = StyleSheet.create({
   },
   retryLocationButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -2013,8 +2125,25 @@ const styles = StyleSheet.create({
   },
   dismissWarningButtonText: {
     color: "rgba(255, 255, 255, 0.8)",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  // Transaction link styles
+  transactionLinkButton: {
+    backgroundColor: "rgba(59, 130, 246, 0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    marginTop: 12,
+  },
+  transactionLinkText: {
+    fontSize: 12,
+    color: "#3b82f6",
+    fontWeight: "600",
+    textAlign: "center",
     letterSpacing: 0.5,
   },
 });

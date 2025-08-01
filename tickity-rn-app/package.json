@@ -75,7 +75,8 @@
     "react-native-web": "~0.20.0",
     "thirdweb": "^5.105.21",
     "three": "^0.166.0",
-    "three-stdlib": "^2.36.0"
+    "three-stdlib": "^2.36.0",
+    "viem": "^2.33.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
