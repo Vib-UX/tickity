@@ -40,7 +40,17 @@ const EventPage = () => {
   const params = useLocalSearchParams();
   const eventId = params.event as string;
   const navigation = useNavigation();
-  const account = useActiveAccount();
+
+  // Add error handling for useActiveAccount
+  let account;
+  try {
+    account = useActiveAccount();
+  } catch (error) {
+    console.error("useActiveAccount error:", error);
+    // Fallback to null account
+    account = null;
+  }
+
   const { data, isLoading, error } = useGetEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
 

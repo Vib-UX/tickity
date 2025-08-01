@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "tickity",
+    "name": "Tickity",
     "slug": "tickity",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "tickity",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -15,12 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.cryptokrotus.tickity",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera for AR experiences.",
-        "ARKit": true
-      },
-      "capabilities": ["ARKit", "ARKit", "ARKit", "ARKit"],
-      "bundleIdentifier": "com.cryptokrotus.tickity"
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -38,11 +36,15 @@
       "intentFilters": [
         {
           "action": "android.intent.action.MAIN",
-          "category": ["android.intent.category.LAUNCHER"]
+          "category": [
+            "android.intent.category.LAUNCHER"
+          ]
         },
         {
           "action": "android.intent.action.MAIN",
-          "category": ["android.intent.category.LAUNCHER"]
+          "category": [
+            "android.intent.category.LAUNCHER"
+          ]
         }
       ]
     },

@@ -7,12 +7,7 @@ import {
 } from "react-native";
 import { createAuth } from "thirdweb/auth";
 import { etherlink } from "thirdweb/chains";
-import {
-  ConnectButton,
-  ConnectEmbed,
-  useActiveAccount,
-  useAutoConnect,
-} from "thirdweb/react";
+import { ConnectButton, ConnectEmbed, useActiveAccount } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { inAppWallet } from "thirdweb/wallets/in-app";
 import { chain, client } from "../constants/thirdweb";
