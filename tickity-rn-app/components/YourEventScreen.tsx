@@ -1,4 +1,5 @@
 import useGetUserEvents from "@/hooks/useGetUserEvents";
+import useRefreshOnFocus from "@/hooks/useRefetchFocus";
 import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -13,12 +14,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { formatUnits } from "viem";
 const { width } = Dimensions.get("window");
 
 const YourEventsScreen = () => {
-  const { data, isLoading, error } = useGetUserEvents();
-  console.log("error", error);
+  const { data, isLoading, error, refetch } = useGetUserEvents();
   const router = useRouter();
+
+  useRefreshOnFocus(async () => {
+    refetch();
+  });
 
   const renderEventItem = ({ item }: { item: any }) => {
     const { hasTickets, ticketCount } = item;
@@ -94,7 +99,7 @@ const YourEventsScreen = () => {
                 <Text style={styles.detailLabel}>💰 Price</Text>
                 <Text style={styles.detailValue}>
                   {item.event.ticketPrices?.[0]
-                    ? `${item.event.ticketPrices[0]} USDT`
+                    ? `${formatUnits(item.event.ticketPrices[0], 6)} USDT`
                     : "TBA"}
                 </Text>
               </View>
@@ -159,6 +164,8 @@ const YourEventsScreen = () => {
                   </Text>
                 </View>
               )}
+              onRefresh={refetch}
+              refreshing={isLoading}
               keyExtractor={(item) => item.event.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.flatListContent}
@@ -253,12 +260,12 @@ const styles = StyleSheet.create({
   },
   eventsHeader: {
     alignItems: "flex-start",
-    marginBottom: 24,
-    marginTop: 20,
+    marginBottom: 20,
+    marginTop: 16,
     paddingHorizontal: 4,
   },
   eventsTitle: {
-    fontSize: 32,
+    fontSize: 28,
     color: "#ffffff",
     fontWeight: "700",
     marginBottom: 8,
@@ -266,10 +273,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   eventsSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.7)",
     textAlign: "left",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   flatListContent: {
     paddingHorizontal: 16,
@@ -277,7 +284,7 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     borderRadius: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
     overflow: "hidden",
@@ -297,7 +304,7 @@ const styles = StyleSheet.create({
   },
   eventImageContainer: {
     position: "relative",
-    height: 180,
+    height: 140,
   },
   eventImage: {
     width: "100%",
@@ -325,29 +332,29 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   eventInfo: {
-    padding: 20,
-    gap: 16,
+    padding: 16,
+    gap: 12,
   },
   titleSection: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   eventTitle: {
-    fontSize: 22,
+    fontSize: 20,
     color: "#ffffff",
     fontWeight: "700",
-    lineHeight: 26,
+    lineHeight: 24,
     marginBottom: 6,
   },
   eventDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   eventDetailsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   detailItem: {
     width: "48%", // Two columns
@@ -361,7 +368,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -381,7 +388,7 @@ const styles = StyleSheet.create({
   },
   viewDetailsButtonText: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -399,7 +406,7 @@ const styles = StyleSheet.create({
   },
   checkoutButtonText: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -412,7 +419,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.6)",
     textAlign: "center",
   },
@@ -423,7 +430,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
   },
   errorContainer: {
@@ -432,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ff6b6b",
     textAlign: "center",
   },

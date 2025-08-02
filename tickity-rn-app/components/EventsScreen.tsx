@@ -17,7 +17,7 @@ import {
 const { width, height } = Dimensions.get("window");
 
 const EventsScreen = () => {
-  const { data, isLoading, error } = useGetEvents();
+  const { data, isLoading, error, refetch } = useGetEvents();
   const router = useRouter();
 
   const renderEventItem = ({ item }: { item: Event }) => (
@@ -96,6 +96,8 @@ const EventsScreen = () => {
             <FlatList
               data={(data as any)?.eventCreateds || []}
               renderItem={renderEventItem}
+              onRefresh={refetch}
+              refreshing={isLoading}
               ListHeaderComponent={() => (
                 <View style={styles.eventsHeader}>
                   <Text style={styles.eventsTitle}>Discover Events</Text>
@@ -202,7 +204,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   eventsTitle: {
-    fontSize: 28,
+    fontSize: 20,
     color: "#ffffff",
     fontWeight: "700",
     marginBottom: 8,
@@ -210,10 +212,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   eventsSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.7)",
-    textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   flatListContent: {
     paddingHorizontal: 16,
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
   },
   eventImageContainer: {
     position: "relative",
-    height: 160,
+    height: 120,
   },
   eventImage: {
     width: "100%",
@@ -247,24 +248,24 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
   eventInfo: {
-    padding: 20,
-    gap: 12,
+    padding: 16,
+    gap: 10,
   },
   eventTitle: {
-    fontSize: 20,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "700",
-    lineHeight: 24,
+    lineHeight: 20,
   },
   eventDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: "rgba(255, 255, 255, 0.8)",
-    lineHeight: 20,
+    lineHeight: 16,
   },
   eventMetaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginTop: 6,
   },
   eventMetaItem: {
     flex: 1,
@@ -277,23 +278,23 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   eventMetaValue: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#ffffff",
     fontWeight: "500",
   },
   viewDetailsButton: {
     backgroundColor: "rgba(255, 255, 255, 0.15)",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 25,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 6,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.2)",
   },
   viewDetailsButtonText: {
     color: "#ffffff",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.6)",
     textAlign: "center",
   },
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
   },
   errorContainer: {
@@ -326,7 +327,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ff6b6b",
     textAlign: "center",
   },

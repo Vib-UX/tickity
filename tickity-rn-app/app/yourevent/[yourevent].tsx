@@ -1,15 +1,23 @@
 import SignInBottomSheet, {
   SignInBottomSheetRef,
 } from "@/components/bottomsheet/SignInBottomSheet";
-import NFTModal from "@/components/NFTModal";
+import NFTModalYourEvent from "@/components/NFTModalYourEvent";
+import TransactionProgress from "@/components/TransactionProgress";
+import { chain, client } from "@/constants/thirdweb";
 import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useNavigation } from "expo-router";
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as Location from "expo-location";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,11 +25,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useActiveAccount } from "thirdweb/react";
+import { getContract, getContractEvents, prepareContractCall } from "thirdweb";
+import { useActiveAccount, useSendCalls } from "thirdweb/react";
+import GLVIEWAPP from "./GLVIEW";
 
 // Define checkout states
 type CheckoutState = "initial" | "verifying" | "stepper" | "completed";
 type StepperStep = "email" | "location" | "selfie" | "ready";
+type TransactionState = "idle" | "loading" | "success" | "error";
 
 const YourEventPage = () => {
   const params = useLocalSearchParams();
@@ -30,12 +41,42 @@ const YourEventPage = () => {
   const account = useActiveAccount();
   const { data, isLoading, error } = useGetUserEvents();
   const signInBottomSheetRef = useRef<SignInBottomSheetRef>(null);
+  const [transactionHash, setTransactionHash] = useState("");
+  const router = useRouter();
+
+  const { data: eventStoredData, refetch: refetchEventStoredData } = useQuery({
+    queryKey: ["transactionHash", eventId, account?.address],
+    queryFn: async () => {
+      const transactionData = await AsyncStorage.getItem(eventId);
+      const transactionDataParsed = await JSON.parse(transactionData || "{}");
+      console.log("transactionDataParsed", transactionDataParsed);
+
+      if (transactionDataParsed.address === account?.address) {
+        return {
+          image: transactionDataParsed?.image,
+          txHash: transactionDataParsed?.transactionHash,
+        };
+      } else {
+        return {
+          image: null,
+          txHash: null,
+        };
+      }
+    },
+  });
+
+  // Transaction state management
+  const [transactionState, setTransactionState] =
+    useState<TransactionState>("idle");
+  const [transactionError, setTransactionError] = useState<string>("");
+  const [currentStep, setCurrentStep] = useState<string>("");
 
   // State management
+  const [showAR, setShowAR] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("initial");
   const [currentStepperStep, setCurrentStepperStep] =
-    useState<StepperStep>("email");
-  const [emailVerified, setEmailVerified] = useState(false);
+    useState<StepperStep>("location");
+  const [emailVerified, setEmailVerified] = useState(true);
   const [locationVerified, setLocationVerified] = useState(false);
   const [selfieTaken, setSelfieTaken] = useState(false);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
@@ -43,7 +84,13 @@ const YourEventPage = () => {
   const [showSuccessUI, setShowSuccessUI] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
-
+  const [distanceToEvent, setDistanceToEvent] = useState<number | null>(null);
+  const [showDistanceWarning, setShowDistanceWarning] = useState(false);
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
+  const [displayNftImage, setDisplayNftImage] = useState("");
+  const [imageUploadError, setImageUploadError] = useState(false);
+  const [imageUploadRetrying, setImageUploadRetrying] = useState(false);
+  const { mutateAsync: sendCalls } = useSendCalls();
   const event = useMemo(() => {
     if (!data || !eventId) return null;
     const events = (data as any)?.events || [];
@@ -52,10 +99,30 @@ const YourEventPage = () => {
     );
     return eventWithTickets?.event as Event;
   }, [data, eventId]);
+  const userTickets = useMemo(() => {
+    if (!data || !eventId) return null;
+    const events = (data as any)?.events || [];
+    const eventWithTickets = events.find(
+      (item: any) => item.event.eventAddress === eventId
+    );
+    return eventWithTickets?.userTickets as bigint[];
+  }, [data, eventId]);
 
   useLayoutEffect(() => {
+    const title = event?.name
+      ? event.name.slice(0, 20) + "..."
+      : `Event #${eventId?.slice(-6) || "N/A"}`;
     navigation.setOptions({
-      title: event?.name || `Event #${eventId?.slice(-6) || "N/A"}`,
+      title,
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => {
+            router.back();
+          }}
+        >
+          <Ionicons name="arrow-back-outline" size={30} color={"#ffffff"} />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation, eventId, event]);
 
@@ -101,29 +168,389 @@ const YourEventPage = () => {
     setCurrentStepperStep("location");
   };
 
-  const handleLocationCheck = () => {
-    // Simulate location verification
-    setLocationVerified(true);
-    setCurrentStepperStep("selfie");
+  // Static event location (in real app, this would come from the event data)
+  const eventLocation = {
+    latitude: 19.2095669, // San Francisco coordinates as example
+    longitude: 73.0934042,
   };
 
-  const handleSelfieCapture = () => {
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    // This function uses the Haversine formula to calculate the great-circle distance between two points on a sphere
+    // The formula calculates the shortest distance between two points on Earth's surface
+    // Parameters:
+    // - lat1, lon1: Latitude and longitude of first point in decimal degrees
+    // - lat2, lon2: Latitude and longitude of second point in decimal degrees
+    // Returns: Distance in meters
+
+    const R = 6371e3; // Earth's radius in meters
+
+    // Convert latitude/longitude from degrees to radians
+    const φ1 = (lat1 * Math.PI) / 180; // φ is latitude in radians
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180; // Δφ is change in latitude
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180; // Δλ is change in longitude
+
+    // Haversine formula components:
+    // a = sin²(Δφ/2) + cos(φ1)·cos(φ2)·sin²(Δλ/2)
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
+    // c = 2·atan2(√a, √(1−a))
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Final distance = R·c where R is Earth's radius
+    return R * c; // Distance in meters
+  };
+
+  const handleLocationCheck = async () => {
+    setIsCheckingLocation(true);
+    try {
+      // Request location permissions
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Denied",
+          "Location permission is required to verify your presence at the event. Please enable location access in your device settings."
+        );
+        return;
+      }
+
+      // Get current location
+      let location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      console.log("Current location:", location);
+      console.log("Event location:", eventLocation);
+
+      // Calculate distance to event
+      const distance = calculateDistance(
+        location.coords.latitude,
+        location.coords.longitude,
+        eventLocation.latitude,
+        eventLocation.longitude
+      );
+
+      console.log("Distance to event:", distance, "meters");
+      // Check if user is within 100m
+      // if (distance <= 100) {
+      setLocationVerified(true);
+      setCurrentStepperStep("selfie");
+      setDistanceToEvent(distance);
+      setShowDistanceWarning(false);
+      Alert.alert(
+        "Location Verified",
+        `Your location has been verified successfully!`
+      );
+      // } else {
+      //   // Show UI that user needs to be within 100m
+      //   setLocationVerified(false);
+      //   setDistanceToEvent(distance);
+      //   setShowDistanceWarning(true);
+      //   Alert.alert(
+      //     "Too Far from Event",
+      //     `You are ${Math.round(
+      //       distance
+      //     )}m from the event. Please move within 100m of the event location to proceed.`
+      //   );
+      // }
+    } catch (error) {
+      console.error("Location error:", error);
+      Alert.alert(
+        "Location Error",
+        "Failed to get your location. Please try again."
+      );
+    } finally {
+      setIsCheckingLocation(false);
+    }
+  };
+
+  const handleSelfieCapture = (uri: string, tmpfile?: string) => {
     // Simulate selfie capture
     setSelfieTaken(true);
-    setSelfieImage(
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop"
-    );
+    setShowAR(false);
+    setSelfieImage(uri);
     setCurrentStepperStep("ready");
+
+    // Store file data for upload
+    if (tmpfile) {
+      setSelfieImage(tmpfile);
+      // You can store fileData in state if needed for upload
+    }
   };
 
-  const handleCompleteCheckout = () => {
-    setShowNFTModal(true);
+  const eventContract = getContract({
+    client: client,
+    address: eventId,
+    chain: chain,
+  });
+
+  const uploadImage = async (uri: string) => {
+    if (!uri) {
+      console.log("No selfie image to upload");
+      return null;
+    }
+
+    try {
+      const formData = new FormData();
+
+      const localUri = `file://${uri}`;
+
+      formData.append("file", {
+        uri: localUri,
+        name: "selfie.jpg",
+        type: "image/jpeg",
+      } as any);
+
+      // Add event details to the form data
+      formData.append("eventName", event?.name || "Unknown Event");
+      formData.append(
+        "eventDescription",
+        event?.description || "Event description not available"
+      );
+      formData.append(
+        "eventOrganizer",
+        event?.organizer || "Unknown Organizer"
+      );
+      formData.append("eventTheme", "blockchain, innovation, Tezos, Etherlink");
+      formData.append("eventLocation", event?.location || "Virtual (Online)");
+      formData.append(
+        "eventDate",
+        event?.startTime ? formatDate(event.startTime) : "Coming Soon"
+      );
+
+      const uploadResponse = await fetch(
+        "https://tickity-production.up.railway.app/analyze-image-ghibli",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (uploadResponse.ok) {
+        const result = await uploadResponse.json();
+        setImageUploadError(false);
+        return result.result;
+      } else {
+        console.error(
+          "Upload failed:",
+          uploadResponse.status,
+          uploadResponse.statusText
+        );
+        setImageUploadError(true);
+        return null;
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setImageUploadError(true);
+      throw new Error("Failed to upload image");
+    }
+  };
+
+  const handleCompleteCheckout = async () => {
+    let imageUrlUpdate = "";
+    try {
+      setTransactionHash("");
+      setTransactionState("loading");
+      setTransactionError("");
+      setCurrentStep("Preparing transaction...");
+
+      if (!event) {
+        throw new Error("Event not found");
+      }
+
+      if (selfieImage) {
+        setCurrentStep("Uploading check-in photo...");
+        setImageUploadError(false);
+        const imageUrl = await uploadImage(selfieImage);
+        if (imageUrl === null) {
+          throw new Error("Failed to upload image");
+        }
+        console.log("imageUrl", imageUrl);
+        imageUrlUpdate = imageUrl;
+        setDisplayNftImage(imageUrl);
+      }
+      setCurrentStep("Processing transaction...");
+      const sendTx2 = prepareContractCall({
+        contract: eventContract,
+        method: "function useTicket(uint256 tokenId) external",
+        params: [userTickets?.[0] || BigInt(0)],
+      });
+
+      await sendCalls({
+        calls: [sendTx2],
+      });
+
+      setCurrentStep("Finalizing your ticket usage...");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setTransactionState("success");
+      setTransactionError("");
+      setShowSuccessUI(true);
+    } catch (error) {
+      console.log("error", error);
+      // Only execute the fallback logic if the error contains the specific message
+      if (
+        error instanceof Error &&
+        error.message.includes("Failed to get user operation receipt")
+      ) {
+        setCurrentStep("Fetching user operations...");
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        const logs = await getContractEvents({
+          contract: eventContract,
+          events: [
+            {
+              // @ts-ignore
+              name: "TicketUsed",
+              inputs: [
+                {
+                  name: "tokenId",
+                  type: "uint256",
+                  indexed: true,
+                  internalType: "uint256",
+                },
+                {
+                  name: "eventId",
+                  type: "uint256",
+                  indexed: true,
+                  internalType: "uint256",
+                },
+                {
+                  name: "user",
+                  type: "address",
+                  indexed: true,
+                  internalType: "address",
+                },
+                {
+                  name: "useTime",
+                  type: "uint256",
+                  indexed: false,
+                  internalType: "uint256",
+                },
+                {
+                  name: "eventName",
+                  type: "string",
+                  indexed: false,
+                  internalType: "string",
+                },
+                {
+                  name: "ticketTypeName",
+                  type: "string",
+                  indexed: false,
+                  internalType: "string",
+                },
+              ],
+            },
+          ],
+          queryFilter: {
+            fromBlock: "earliest",
+            toBlock: "latest",
+          },
+        });
+        console.log("logs", logs);
+        const latestLog = logs[0].transactionHash;
+        const tx = logs[logs.length - 1];
+        console.log({
+          latestLog,
+          tx: tx.transactionHash,
+        });
+        if (tx.transactionHash) {
+          setTransactionHash(tx.transactionHash);
+          setCurrentStep("Finalizing your ticket usage...");
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          setTransactionState("success");
+          setTransactionError("");
+          setShowNFTModal(true);
+          console.log("setting", {
+            address: account?.address,
+            image: imageUrlUpdate,
+            transactionHash: tx.transactionHash,
+          });
+          await AsyncStorage.setItem(
+            eventId,
+            JSON.stringify({
+              address: account?.address,
+              image: imageUrlUpdate,
+              transactionHash: tx.transactionHash,
+            })
+          );
+          return;
+        }
+      }
+
+      setTransactionError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
+      setTimeout(() => {
+        setTransactionState("idle");
+        setTransactionError("");
+        setCurrentStep("");
+      }, 5000);
+    }
+    refetchEventStoredData();
   };
 
   const handleCloseNFTModal = () => {
     setShowNFTModal(false);
     setShowSuccessUI(true);
   };
+
+  const resetTransactionState = () => {
+    setTransactionState("idle");
+    setTransactionError("");
+    setCurrentStep("");
+    setTransactionHash("");
+  };
+
+  const handleOpenTransactionURL = () => {
+    if (!transactionHash && !eventStoredData?.txHash) {
+      console.warn("No transaction hash available to open explorer URL");
+      return;
+    }
+
+    const hash = transactionHash || eventStoredData?.txHash;
+    if (!hash) {
+      console.warn("Transaction hash is undefined");
+      return;
+    }
+
+    const explorerUrl = `https://testnet.explorer.etherlink.com/tx/${hash}`;
+    Linking.openURL(explorerUrl).catch((error) => {
+      console.error("Failed to open explorer URL:", error);
+    });
+  };
+
+  const handleShareOnTwitter = async () => {
+    const imageUrl = eventStoredData?.image;
+    const shareMessage = `🎉 Just checked in to ${
+      event?.name || "an event"
+    }! 🎫✨\n\n#NFT #Tickity #EventTickets\n\n${imageUrl}`;
+
+    try {
+      const webUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        shareMessage
+      )}`;
+      Linking.openURL(webUrl);
+    } catch (error) {
+      console.error("Error sharing:", error);
+    }
+  };
+
+  if (showAR) {
+    return (
+      <GLVIEWAPP
+        onComplete={(uri, tmpfile) => {
+          handleSelfieCapture(uri, tmpfile);
+        }}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -161,24 +588,23 @@ const YourEventPage = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <LinearGradient
-        colors={["#000000", "#1a1a1a", "#2d2d2d"]}
-        style={styles.container}
-      >
+    <LinearGradient
+      colors={["#000000", "#1a1a1a", "#2d2d2d"]}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
         <SignInBottomSheet ref={signInBottomSheetRef} />
-
-        {/* NFT Modal */}
-        <NFTModal
+        <NFTModalYourEvent
           visible={showNFTModal}
           onClose={handleCloseNFTModal}
-          nftImage={event?.image}
+          nftImage={displayNftImage}
           eventName={event?.name}
           ticketQuantity={1}
-          transactionHash=""
-          onRefetch={() => {}}
+          transactionHash={transactionHash}
+          onRefetch={() => {
+            refetchEventStoredData();
+          }}
         />
-
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -203,16 +629,30 @@ const YourEventPage = () => {
 
           {/* Event Content */}
           <View style={styles.content}>
+            {/* About Section - Moved to top */}
+
             {/* Event Title */}
             <View style={styles.eventHeader}>
               <Text style={styles.eventTitle} numberOfLines={2}>
                 {event.name || `Event #${event.id.slice(-6)}`}
               </Text>
               <View style={styles.eventBadge}>
-                <Text style={styles.eventBadgeText}>Your Event</Text>
+                <Text style={styles.eventBadgeText}>Going</Text>
               </View>
             </View>
-
+            <View style={styles.descriptionCard}>
+              <Text style={styles.descriptionLabel}>About This Event</Text>
+              <ScrollView
+                style={styles.descriptionScrollView}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                <Text style={styles.eventDescription}>
+                  {event.description ||
+                    "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
+                </Text>
+              </ScrollView>
+            </View>
             {/* Event Details */}
             <View style={styles.detailsSection}>
               <Text style={styles.sectionTitle}>Event Details</Text>
@@ -252,8 +692,168 @@ const YourEventPage = () => {
               </View>
             </View>
 
+            {/* Success UI */}
+            {(showSuccessUI || eventStoredData?.txHash) && (
+              <View style={styles.successUISection}>
+                <View style={styles.successUIContainer}>
+                  <View style={styles.successIconContainer}>
+                    <Text style={styles.successIcon}>🎉</Text>
+                  </View>
+                  <Text style={styles.successTitle}>
+                    Successfully Checked In!
+                  </Text>
+                  <Text style={styles.successSubtitle}>
+                    You have been successfully verified and checked in to the
+                    event.
+                  </Text>
+
+                  <View style={styles.successDetails}>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Event</Text>
+                      <Text
+                        style={styles.successDetailValue}
+                        numberOfLines={3}
+                        ellipsizeMode="tail"
+                      >
+                        {event?.name || "Event"}
+                      </Text>
+                    </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>
+                        Check-in Time
+                      </Text>
+                      <Text style={styles.successDetailValue}>
+                        {new Date().toLocaleTimeString()}
+                      </Text>
+                    </View>
+                    <View style={styles.successDetailItem}>
+                      <Text style={styles.successDetailLabel}>Status</Text>
+                      <Text style={styles.successDetailValue}>Active</Text>
+                    </View>
+                  </View>
+
+                  {/* Selfie Image Display */}
+                  {eventStoredData?.image && (
+                    <View style={styles.selfieSection}>
+                      <Text style={styles.selfieTitle}>
+                        Your Check-in Photo
+                      </Text>
+                      <View style={styles.selfieImageContainer}>
+                        <Image
+                          source={{
+                            uri: eventStoredData?.image,
+                          }}
+                          style={styles.selfieImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                      <Text style={styles.selfieCaption}>
+                        This photo was taken during your check-in process
+                      </Text>
+                    </View>
+                  )}
+                  {eventStoredData?.image && (
+                    <TouchableOpacity
+                      style={styles.shareButton}
+                      onPress={handleShareOnTwitter}
+                    >
+                      <LinearGradient
+                        colors={["#000000", "#1a1a1a"]}
+                        style={styles.buttonGradient}
+                      >
+                        <View style={styles.shareButtonContent}>
+                          <Text style={styles.shareButtonText}>Share on</Text>
+                          <Image
+                            source={require("../../assets/images/logo-white.png")}
+                            style={styles.shareButtonImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={{ height: 100 }} />
+              </View>
+            )}
+            {/* Distance Warning UI - Moved above checkout process */}
+            {showDistanceWarning && distanceToEvent !== null && (
+              <View style={styles.distanceWarningSection}>
+                <View style={styles.distanceWarningContainer}>
+                  <View style={styles.distanceWarningIconContainer}>
+                    <Text style={styles.distanceWarningIcon}>📍</Text>
+                  </View>
+                  <Text style={styles.distanceWarningTitle}>
+                    Too Far from Event
+                  </Text>
+                  <Text style={styles.distanceWarningSubtitle}>
+                    You need to be within 100m of the event location to proceed
+                    with verification.
+                  </Text>
+
+                  <View style={styles.distanceInfoContainer}>
+                    <View style={styles.distanceInfoItem}>
+                      <Text style={styles.distanceInfoLabel}>
+                        Current Distance
+                      </Text>
+                      <Text style={styles.distanceInfoValue}>
+                        {Math.round(distanceToEvent)}m from event
+                      </Text>
+                    </View>
+                    <View style={styles.distanceInfoItem}>
+                      <Text style={styles.distanceInfoLabel}>
+                        Required Distance
+                      </Text>
+                      <Text style={styles.distanceInfoValue}>Within 100m</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.distanceWarningActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.retryLocationButton,
+                        isCheckingLocation &&
+                          styles.retryLocationButtonDisabled,
+                      ]}
+                      onPress={handleLocationCheck}
+                      disabled={isCheckingLocation}
+                    >
+                      <LinearGradient
+                        colors={["#22c55e", "#16a34a"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.retryLocationGradient}
+                      >
+                        {isCheckingLocation ? (
+                          <View style={styles.retryLocationButtonLoading}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Text style={styles.retryLocationButtonText}>
+                              Checking Location...
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.retryLocationButtonText}>
+                            Check Location Again
+                          </Text>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.dismissWarningButton}
+                      onPress={() => setShowDistanceWarning(false)}
+                    >
+                      <Text style={styles.dismissWarningButtonText}>
+                        Dismiss
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* Stepper - Only show after verification starts */}
-            {checkoutState !== "initial" && (
+            {transactionState !== "success" && checkoutState !== "initial" && (
               <View style={styles.stepperSection}>
                 <Text style={styles.stepperTitle}>Checkout Process</Text>
                 <Text style={styles.stepperSubtitle}>
@@ -315,12 +915,28 @@ const YourEventPage = () => {
                       {currentStepperStep === "location" &&
                         !locationVerified && (
                           <TouchableOpacity
-                            style={styles.stepButton}
+                            style={[
+                              styles.stepButton,
+                              isCheckingLocation && styles.stepButtonDisabled,
+                            ]}
                             onPress={handleLocationCheck}
+                            disabled={isCheckingLocation}
                           >
-                            <Text style={styles.stepButtonText}>
-                              Check Location
-                            </Text>
+                            {isCheckingLocation ? (
+                              <View style={styles.stepButtonLoading}>
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#22c55e"
+                                />
+                                <Text style={styles.stepButtonText}>
+                                  Checking Location...
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.stepButtonText}>
+                                Check Location
+                              </Text>
+                            )}
                           </TouchableOpacity>
                         )}
                       {locationVerified && (
@@ -351,22 +967,33 @@ const YourEventPage = () => {
                       {currentStepperStep === "selfie" && !selfieTaken && (
                         <TouchableOpacity
                           style={styles.stepButton}
-                          onPress={handleSelfieCapture}
+                          onPress={() => setShowAR(true)}
                         >
                           <Text style={styles.stepButtonText}>Take Selfie</Text>
                         </TouchableOpacity>
                       )}
-                      {selfieTaken && selfieImage && (
-                        <View style={styles.selfieContainer}>
-                          <Image
-                            source={{ uri: selfieImage }}
-                            style={styles.selfieImage}
-                            resizeMode="cover"
-                          />
-                          <Text style={styles.stepCompleted}>
-                            ✓ Selfie Captured
+                      {/* Selfie Image Display */}
+                      {selfieImage && (
+                        <View style={styles.selfieSection}>
+                          <Text style={styles.selfieTitle}>
+                            Your Check-in Photo
+                          </Text>
+                          <View style={styles.selfieImageContainer}>
+                            <Image
+                              source={{ uri: selfieImage }}
+                              style={styles.selfieImage}
+                              resizeMode="cover"
+                            />
+                          </View>
+                          <Text style={styles.selfieCaption}>
+                            This photo was taken during your check-in process
                           </Text>
                         </View>
+                      )}
+                      {selfieTaken && (
+                        <Text style={styles.stepCompleted}>
+                          ✓ Selfie Captured
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -393,18 +1020,39 @@ const YourEventPage = () => {
                         locationVerified &&
                         selfieTaken && (
                           <TouchableOpacity
-                            style={styles.transactButton}
+                            style={[
+                              styles.transactButton,
+                              transactionState === "loading" &&
+                                styles.transactButtonDisabled,
+                            ]}
                             onPress={handleCompleteCheckout}
+                            disabled={transactionState === "loading"}
                           >
                             <LinearGradient
-                              colors={["#22c55e", "#16a34a"]}
+                              colors={
+                                transactionState === "loading"
+                                  ? ["#666666", "#444444"]
+                                  : ["#22c55e", "#16a34a"]
+                              }
                               start={{ x: 0, y: 0 }}
                               end={{ x: 1, y: 0 }}
                               style={styles.transactGradient}
                             >
-                              <Text style={styles.transactButtonText}>
-                                Transact
-                              </Text>
+                              {transactionState === "loading" ? (
+                                <View style={styles.transactButtonLoading}>
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#ffffff"
+                                  />
+                                  <Text style={styles.transactButtonText}>
+                                    Processing...
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.transactButtonText}>
+                                  Transact
+                                </Text>
+                              )}
                             </LinearGradient>
                           </TouchableOpacity>
                         )}
@@ -413,109 +1061,186 @@ const YourEventPage = () => {
                 </View>
               </View>
             )}
-
-            {/* Success UI */}
-            {showSuccessUI && (
-              <View style={styles.successUISection}>
-                <View style={styles.successUIContainer}>
-                  <View style={styles.successIconContainer}>
-                    <Text style={styles.successIcon}>🎉</Text>
-                  </View>
-                  <Text style={styles.successTitle}>
-                    Successfully Checked In!
-                  </Text>
-                  <Text style={styles.successSubtitle}>
-                    You have been successfully verified and checked in to the
-                    event.
-                  </Text>
-
-                  <View style={styles.successDetails}>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>Event</Text>
-                      <Text
-                        style={styles.successDetailValue}
-                        numberOfLines={3}
-                        ellipsizeMode="tail"
-                      >
-                        {event?.name || "Event"}
-                      </Text>
-                    </View>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>
-                        Check-in Time
-                      </Text>
-                      <Text style={styles.successDetailValue}>
-                        {new Date().toLocaleTimeString()}
-                      </Text>
-                    </View>
-                    <View style={styles.successDetailItem}>
-                      <Text style={styles.successDetailLabel}>Status</Text>
-                      <Text style={styles.successDetailValue}>Active</Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={() => setShowSuccessUI(false)}
-                  >
-                    <LinearGradient
-                      colors={["#22c55e", "#16a34a"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.continueGradient}
-                    >
-                      <Text style={styles.continueButtonText}>Continue</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* About Section */}
-            <View style={styles.descriptionCard}>
-              <Text style={styles.descriptionLabel}>About This Event</Text>
-              <Text style={styles.eventDescription}>
-                {event.description ||
-                  "An amazing event experience awaits you. Join us for an unforgettable time with great music, food, and entertainment."}
-              </Text>
-            </View>
           </View>
         </ScrollView>
-
-        {/* Bottom Action Button */}
-        {checkoutState === "initial" && (
-          <View style={styles.bottomActionContainer}>
-            <TouchableOpacity
-              style={[
-                styles.startVerificationButton,
-                isVerifying && styles.startVerificationButtonDisabled,
-              ]}
-              onPress={handleVerifyEvent}
-              disabled={isVerifying}
-            >
-              <LinearGradient
-                colors={["#667eea", "#764ba2"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.startVerificationGradient}
-              >
-                {isVerifying ? (
-                  <ActivityIndicator size="large" color="#ffffff" />
-                ) : (
-                  <Text style={styles.startVerificationButtonText}>
-                    Start Verification
+        {/* Transaction Progress or Action Button */}
+        <View style={styles.bottomActionContainer}>
+          {/* Success Message */}
+          {transactionState === "success" || eventStoredData?.txHash ? (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>
+                🎉 Ticket used successfully!
+              </Text>
+              <Text style={styles.successSubtext}>
+                You have been checked in to the event
+              </Text>
+              {(transactionHash || eventStoredData?.txHash) && (
+                <TouchableOpacity
+                  style={styles.transactionLinkButton}
+                  onPress={handleOpenTransactionURL}
+                >
+                  <Text style={styles.transactionLinkText}>
+                    View Transaction ↗
                   </Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
 
-            {verificationError && (
-              <Text style={styles.errorText}>{verificationError}</Text>
+          {/* Error Message */}
+          {transactionState === "error" && (
+            <View style={styles.errorMessageContainer}>
+              <Text style={styles.errorMessageText}>❌ {transactionError}</Text>
+            </View>
+          )}
+
+          {/* Start Verification Button - Only show when not in transaction state */}
+          {checkoutState === "initial" &&
+            transactionState === "idle" &&
+            !eventStoredData?.txHash && (
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.startVerificationButton,
+                    isVerifying && styles.startVerificationButtonDisabled,
+                  ]}
+                  onPress={handleVerifyEvent}
+                  disabled={isVerifying}
+                >
+                  <LinearGradient
+                    colors={["#22c55e", "#16a34a"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.startVerificationGradient}
+                  >
+                    {isVerifying ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.startVerificationButtonText}>
+                        Start Verification
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {verificationError && (
+                  <Text style={styles.errorText}>{verificationError}</Text>
+                )}
+              </>
             )}
+        </View>
+      </SafeAreaView>
+
+      {/* Full Screen Transaction Progress Overlay */}
+      {transactionState === "loading" && (
+        <View style={styles.fullScreenTransactionOverlay}>
+          <TransactionProgress
+            currentStep={currentStep}
+            ticketQuantity={1}
+            cta="Checking you into the event"
+          />
+        </View>
+      )}
+
+      {/* Full Screen Error Overlay */}
+      {transactionState === "error" && (
+        <View style={styles.fullScreenErrorOverlay}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIconContainer}>
+              <Text style={styles.errorIcon}>❌</Text>
+            </View>
+            <Text style={styles.errorTitle}>Transaction Failed</Text>
+            <Text style={styles.errorDescription}>
+              {transactionError ||
+                "An unexpected error occurred during the transaction."}
+            </Text>
+
+            {transactionHash && (
+              <TouchableOpacity
+                style={styles.transactionLinkButton}
+                onPress={handleOpenTransactionURL}
+              >
+                <Text style={styles.transactionLinkText}>
+                  View Transaction ↗
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.closeErrorButton}
+              onPress={() => {
+                setTransactionState("idle");
+                setTransactionError("");
+              }}
+            >
+              <Text style={styles.closeErrorButtonText}>Close</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </LinearGradient>
-    </SafeAreaView>
+        </View>
+      )}
+
+      {/* Full Screen Image Upload Error Overlay */}
+      {imageUploadError && (
+        <View style={styles.fullScreenErrorOverlay}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIconContainer}>
+              <Text style={styles.errorIcon}>📷</Text>
+            </View>
+            <Text style={styles.errorTitle}>Image Upload Failed</Text>
+            <Text style={styles.errorDescription}>
+              We couldn't upload your check-in photo. This might be due to a
+              network issue or server problem. Please try again.
+            </Text>
+
+            <View style={styles.imageUploadErrorActions}>
+              <TouchableOpacity
+                style={[
+                  styles.retryImageUploadButton,
+                  imageUploadRetrying && styles.retryImageUploadButtonDisabled,
+                ]}
+                onPress={handleCompleteCheckout}
+                disabled={imageUploadRetrying}
+              >
+                <LinearGradient
+                  colors={
+                    imageUploadRetrying
+                      ? ["#666666", "#444444"]
+                      : ["#22c55e", "#16a34a"]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.retryImageUploadGradient}
+                >
+                  {imageUploadRetrying ? (
+                    <View style={styles.retryImageUploadButtonLoading}>
+                      <ActivityIndicator size="small" color="#ffffff" />
+                      <Text style={styles.retryImageUploadButtonText}>
+                        Uploading...
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.retryImageUploadButtonText}>
+                      Retry Upload
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelImageUploadButton}
+                onPress={() => {
+                  setImageUploadError(false);
+                  setTransactionState("idle");
+                  setCurrentStep("");
+                }}
+              >
+                <Text style={styles.cancelImageUploadButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+    </LinearGradient>
   );
 };
 
@@ -524,7 +1249,7 @@ export default YourEventPage;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#000000",
+    padding: 6,
   },
   container: {
     flex: 1,
@@ -532,7 +1257,23 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  shareButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  shareButtonImage: {
+    width: 20,
+    height: 20,
+  },
+  shareButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
   scrollContent: {
+    paddingHorizontal: 6,
     paddingBottom: 100, // Reduced since ticket selection is now in main content
   },
   loadingContainer: {
@@ -588,10 +1329,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   eventTitle: {
-    fontSize: 28,
+    fontSize: 24,
     color: "#ffffff",
     fontWeight: "700",
-    lineHeight: 32,
+    lineHeight: 28,
     flex: 1,
     marginRight: 12,
     flexShrink: 1,
@@ -617,6 +1358,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
+    maxHeight: 100,
+  },
+  descriptionScrollView: {
+    maxHeight: 60,
   },
   descriptionLabel: {
     fontSize: 14,
@@ -626,9 +1371,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   eventDescription: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
-    lineHeight: 24,
+    lineHeight: 20,
   },
   detailsSection: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -638,7 +1383,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 12,
@@ -670,6 +1415,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
+  shareButton: {
+    borderRadius: 30,
+    marginTop: 10,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   detailIcon: {
     fontSize: 20,
     color: "#ffffff",
@@ -685,7 +1443,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -753,7 +1511,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   eventIdValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     fontFamily: "monospace",
@@ -792,7 +1550,7 @@ const styles = StyleSheet.create({
   },
   buyTicketButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -849,7 +1607,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   ticketSelectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 2,
@@ -906,7 +1664,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   quantityNumber: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -934,7 +1692,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   priceValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -951,7 +1709,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   ticketTypesTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 2,
@@ -985,7 +1743,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ticketTypeName: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     flex: 1,
@@ -1012,7 +1770,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ticketTypePrice: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#ffffff",
     fontWeight: "700",
   },
@@ -1062,7 +1820,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   balanceValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
   },
@@ -1129,7 +1887,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   purchasedTicketsTitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1190,7 +1948,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(34, 197, 94, 0.2)",
   },
   myTicketsCount: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1217,7 +1975,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   myTicketsDetailValue: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#ffffff",
     fontWeight: "500",
   },
@@ -1247,7 +2005,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   ticketTypeItemName: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#22c55e",
     fontWeight: "600",
   },
@@ -1263,7 +2021,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ticketTypeItemPrice: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#ffffff",
     fontWeight: "500",
   },
@@ -1277,7 +2035,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   verifyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 8,
@@ -1310,7 +2068,7 @@ const styles = StyleSheet.create({
   },
   verifyButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -1319,7 +2077,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   stepperTitle: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 8,
@@ -1369,7 +2127,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     marginBottom: 4,
@@ -1407,13 +2165,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   startVerificationGradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 32,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: "center",
   },
   startVerificationButtonText: {
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -1436,6 +2194,14 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  stepButtonDisabled: {
+    opacity: 0.6,
+  },
+  stepButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   transactButton: {
     borderRadius: 16,
     overflow: "hidden",
@@ -1456,9 +2222,17 @@ const styles = StyleSheet.create({
   },
   transactButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  transactButtonDisabled: {
+    opacity: 0.6,
+  },
+  transactButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   selfieContainer: {
     marginTop: 12,
@@ -1496,18 +2270,18 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   successTitle: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#22c55e",
     fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
   },
   successSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
     textAlign: "center",
     marginBottom: 20,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   successDetails: {
     width: "100%",
@@ -1531,7 +2305,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   successDetailValue: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#ffffff",
     fontWeight: "600",
     flex: 1,
@@ -1559,7 +2333,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -1572,5 +2346,305 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.9)",
     borderTopWidth: 1,
     borderTopColor: "rgba(255, 255, 255, 0.1)",
+  },
+  // Distance Warning Styles
+  distanceWarningSection: {
+    marginTop: 20,
+  },
+  distanceWarningContainer: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.2)",
+    alignItems: "center",
+  },
+  distanceWarningIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  distanceWarningIcon: {
+    fontSize: 40,
+  },
+  distanceWarningTitle: {
+    fontSize: 20,
+    color: "#ef4444",
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  distanceWarningSubtitle: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  distanceInfoContainer: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  distanceInfoItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  distanceInfoLabel: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    flexShrink: 0,
+    marginRight: 8,
+  },
+  distanceInfoValue: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+    marginLeft: 8,
+    flexShrink: 1,
+  },
+  distanceWarningActions: {
+    width: "100%",
+    gap: 12,
+  },
+  retryLocationButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  retryLocationGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  retryLocationButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  retryLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryLocationButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dismissWarningButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  dismissWarningButtonText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  // Transaction link styles
+  transactionLinkButton: {
+    backgroundColor: "rgba(59, 130, 246, 0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    marginTop: 12,
+  },
+  transactionLinkText: {
+    fontSize: 12,
+    color: "#3b82f6",
+    fontWeight: "600",
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
+  // Selfie Image Styles
+  selfieSection: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  selfieTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  selfieImageContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "rgba(52, 199, 89, 0.3)",
+    shadowColor: "#34C759",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  selfieImage: {
+    width: "100%",
+    height: "100%",
+  },
+  selfieCaption: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 16,
+  },
+  // Full Screen Transaction Overlay
+  fullScreenTransactionOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  // Full Screen Error Overlay Styles
+  fullScreenErrorOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  errorContent: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    maxWidth: 350,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  errorIconContainer: {
+    marginBottom: 20,
+  },
+  errorIcon: {
+    fontSize: 64,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#ef4444",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  errorDescription: {
+    fontSize: 16,
+    color: "#CCCCCC",
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 24,
+  },
+  closeErrorButton: {
+    backgroundColor: "#ef4444",
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    shadowColor: "#ef4444",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  closeErrorButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  // Image Upload Error Styles
+  imageUploadErrorActions: {
+    width: "100%",
+    gap: 12,
+    marginTop: 20,
+  },
+  retryImageUploadButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  retryImageUploadButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryImageUploadGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  retryImageUploadButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  retryImageUploadButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  cancelImageUploadButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  cancelImageUploadButtonText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });

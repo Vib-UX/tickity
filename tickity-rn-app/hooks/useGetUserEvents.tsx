@@ -1,11 +1,12 @@
 import getEvents from "@/constants/subgraph";
 import { chain, client } from "@/constants/thirdweb";
+import { Event } from "@/types/event";
 import { useQuery } from "@tanstack/react-query";
 import { getContract, readContract } from "thirdweb";
 import { useActiveAccount } from "thirdweb/react";
 
-interface EventWithTickets {
-  event: any;
+export interface EventWithTickets {
+  event: Event;
   userTickets: readonly bigint[];
   hasTickets: boolean;
   ticketCount: number;
@@ -13,7 +14,7 @@ interface EventWithTickets {
 
 const useGetUserEvents = () => {
   const account = useActiveAccount();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["userEvents", account?.address],
     queryFn: async () => {
       if (!account) {
@@ -70,7 +71,7 @@ const useGetUserEvents = () => {
     gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 };
 
 export default useGetUserEvents;

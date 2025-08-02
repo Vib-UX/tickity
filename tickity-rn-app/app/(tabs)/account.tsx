@@ -1,9 +1,12 @@
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
+import useRefreshOnFocus from "@/hooks/useRefetchFocus";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -51,9 +54,26 @@ let isLoggedIn = false;
 
 export default function AccountScreen() {
   const account = useActiveAccount();
-  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
-  const { balance: usdtBalance, isLoading: isLoadingBalance } =
-    useGetUSDTBalance();
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const {
+    balance: usdtBalance,
+    isLoading: isLoadingBalance,
+    refetch,
+  } = useGetUSDTBalance();
+
+  useRefreshOnFocus(async () => {
+    refetch();
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -64,19 +84,28 @@ export default function AccountScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={["#000000", "#1a1a1a", "#2d2d2d"]}
-        style={styles.gradient}
-      >
+    <LinearGradient
+      colors={["#000000", "#1a1a1a", "#2d2d2d"]}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#22c55e"
+              colors={["#22c55e"]}
+            />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Account</Text>
             <Text style={styles.headerSubtitle}>
-              Manage your wallet and view transaction history
+              Manage your wallet and preferences
             </Text>
           </View>
 
@@ -112,44 +141,83 @@ export default function AccountScreen() {
                 </Text>
               </View>
 
-              {/* Transaction Summary Card */}
-              <View style={styles.transactionSummaryCard}>
-                <View style={styles.transactionSummaryHeader}>
-                  <Text style={styles.transactionSummaryIcon}>📊</Text>
-                  <Text style={styles.transactionSummaryTitle}>
-                    Transaction History
-                  </Text>
-                </View>
-                <View style={styles.transactionSummaryContent}>
-                  <Text style={styles.transactionCount}></Text>
-                  <TouchableOpacity
-                    style={styles.viewHistoryButton}
-                    onPress={() => setShowTransactionHistory(true)}
-                  >
-                    <Text style={styles.viewHistoryButtonText}>View All</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
               {/* Quick Actions */}
               <View style={styles.quickActionsCard}>
                 <Text style={styles.quickActionsTitle}>Quick Actions</Text>
                 <View style={styles.quickActionsGrid}>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => router.push("/(tabs)/favourites")}
+                  >
                     <Text style={styles.quickActionIcon}>🎫</Text>
                     <Text style={styles.quickActionText}>My Tickets</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => router.push("/(tabs)/explore")}
+                  >
                     <Text style={styles.quickActionIcon}>📅</Text>
                     <Text style={styles.quickActionText}>My Events</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => {
+                      // TODO: Navigate to settings when available
+                      console.log("Settings pressed");
+                    }}
+                  >
                     <Text style={styles.quickActionIcon}>⚙️</Text>
                     <Text style={styles.quickActionText}>Settings</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => {
+                      // TODO: Navigate to help when available
+                      console.log("Help pressed");
+                    }}
+                  >
                     <Text style={styles.quickActionIcon}>❓</Text>
                     <Text style={styles.quickActionText}>Help</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Recent Activity */}
+              <View style={styles.recentActivityCard}>
+                <Text style={styles.recentActivityTitle}>Recent Activity</Text>
+                <View style={styles.recentActivityList}>
+                  <TouchableOpacity
+                    style={styles.recentActivityItem}
+                    onPress={() => router.push("/(tabs)/explore")}
+                  >
+                    <View style={styles.recentActivityIconContainer}>
+                      <Text style={styles.recentActivityIcon}>🎉</Text>
+                    </View>
+                    <View style={styles.recentActivityContent}>
+                      <Text style={styles.recentActivityTitle}>
+                        View All Events
+                      </Text>
+                      <Text style={styles.recentActivitySubtitle}>
+                        Discover and attend events
+                      </Text>
+                    </View>
+                    <Text style={styles.recentActivityArrow}>→</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.recentActivityItem}
+                    onPress={() => router.push("/(tabs)/favourites")}
+                  >
+                    <View style={styles.recentActivityIconContainer}>
+                      <Text style={styles.recentActivityIcon}>🎫</Text>
+                    </View>
+                    <View style={styles.recentActivityContent}>
+                      <Text style={styles.recentActivityTitle}>My Tickets</Text>
+                      <Text style={styles.recentActivitySubtitle}>
+                        View your purchased tickets
+                      </Text>
+                    </View>
+                    <Text style={styles.recentActivityArrow}>→</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -209,15 +277,14 @@ export default function AccountScreen() {
             </View>
           )}
         </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
   },
   gradient: {
     flex: 1,
@@ -225,31 +292,35 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingTop: 8,
+    paddingBottom: 20,
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: "rgba(255, 255, 255, 0.7)",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   accountContainer: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 14,
   },
   walletCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -288,7 +359,7 @@ const styles = StyleSheet.create({
   balanceCard: {
     backgroundColor: "rgba(34, 197, 94, 0.1)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(34, 197, 94, 0.2)",
   },
@@ -312,56 +383,10 @@ const styles = StyleSheet.create({
     color: "#22c55e",
     fontWeight: "700",
   },
-  transactionSummaryCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  transactionSummaryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  transactionSummaryIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  transactionSummaryTitle: {
-    fontSize: 16,
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  transactionSummaryContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  transactionCount: {
-    fontSize: 18,
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  viewHistoryButton: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.3)",
-  },
-  viewHistoryButtonText: {
-    fontSize: 12,
-    color: "#3b82f6",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
   quickActionsCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -369,7 +394,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#ffffff",
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   quickActionsGrid: {
     flexDirection: "row",
@@ -399,7 +424,7 @@ const styles = StyleSheet.create({
   walletConnectionCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -428,5 +453,56 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
     maxWidth: 280,
+  },
+  // Recent Activity Styles
+  recentActivityCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  recentActivityTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 14,
+  },
+  recentActivityList: {
+    gap: 12,
+  },
+  recentActivityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  recentActivityIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  recentActivityIcon: {
+    fontSize: 20,
+  },
+  recentActivityContent: {
+    flex: 1,
+  },
+  recentActivitySubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    marginTop: 2,
+  },
+  recentActivityArrow: {
+    fontSize: 18,
+    color: "rgba(255, 255, 255, 0.5)",
+    fontWeight: "600",
   },
 });

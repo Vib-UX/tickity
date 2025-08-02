@@ -1,144 +1,139 @@
-# Local Build Options for Tickity
+# Build Instructions
 
-This guide explains how to use the local build options for the Tickity React Native app.
+## Environment Variables Setup
 
-## Prerequisites
+To fix the "useActiveAccount should be used within ThirdwebProvider" error in TestFlight builds, you need to set up environment variables properly.
 
-1. **Install EAS CLI** (if not already installed):
+### Option 1: Using EAS Build Configuration
 
-   ```bash
-   npm install -g @expo/eas-cli
-   ```
+1. Create a `.env` file in your project root (if it doesn't exist):
 
-2. **Login to Expo**:
+```bash
+EXPO_PUBLIC_THIRDWEB_CLIENT_ID=e815b7bc8066484753033e49b5f637f8
+EXPO_PUBLIC_THIRDWEB_SECRET_KEY=TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA
+```
 
-   ```bash
-   eas login
-   ```
+2. Update your `eas.json` to include environment variables:
 
-3. **Configure EAS** (first time only):
-   ```bash
-   eas build:configure
-   ```
+```json
+{
+  "cli": {
+    "version": ">= 16.16.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
+        "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
+        "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
+        "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+```
 
-## Available Build Scripts
+### Option 2: Using EAS CLI
 
-### Development Builds
+You can also set environment variables using the EAS CLI:
 
-- `npm run build:dev` - Build for both platforms (development)
-- `npm run build:android:dev` - Android development build
-- `npm run build:ios:dev` - iOS development build
+```bash
+# Set environment variables for all builds
+eas secret:create --scope project --name EXPO_PUBLIC_THIRDWEB_CLIENT_ID --value "e815b7bc8066484753033e49b5f637f8"
+eas secret:create --scope project --name EXPO_PUBLIC_THIRDWEB_SECRET_KEY --value "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
+```
 
-### Preview Builds
+## Build Commands
 
-- `npm run build:preview` - Build for both platforms (preview)
-- `npm run build:android:preview` - Android preview build
-- `npm run build:ios:preview` - iOS preview build
+### Development Build
 
-### Production Builds
+```bash
+npm run build:dev
+```
 
-- `npm run build:prod` - Build for both platforms (production)
-- `npm run build:android:prod` - Android production build
-- `npm run build:ios:prod` - iOS production build
+### Preview Build (for TestFlight)
 
-### Utility Scripts
+```bash
+npm run build:preview
+```
 
-- `npm run prebuild` - Generate native code
-- `npm run clean` - Clean and regenerate native code
+### Production Build
 
-## Build Profiles
-
-### Development Profile
-
-- **Purpose**: For development and testing
-- **Features**: Development client, internal distribution
-- **Android**: APK format
-- **iOS**: Development build with debugging capabilities
-
-### Preview Profile
-
-- **Purpose**: For internal testing and QA
-- **Features**: Internal distribution, optimized for testing
-- **Android**: APK format
-- **iOS**: Preview build for testing
-
-### Production Profile
-
-- **Purpose**: For app store submission
-- **Features**: Optimized for production
-- **Android**: AAB format (required for Play Store)
-- **iOS**: Production build for App Store
-
-## Platform-Specific Notes
-
-### Android
-
-- Development and Preview builds create APK files
-- Production builds create AAB files (required for Google Play Store)
-- Minimum SDK version: 26
-
-### iOS
-
-- Requires macOS and Xcode for local builds
-- Development builds include development client
-- All builds use medium resource class for optimal performance
-
-## Environment Setup
-
-### For Android Local Builds
-
-1. Install Android Studio
-2. Set up Android SDK
-3. Configure ANDROID_HOME environment variable
-
-### For iOS Local Builds
-
-1. Install Xcode
-2. Install iOS Simulator
-3. Accept Xcode license: `sudo xcodebuild -license accept`
+```bash
+npm run build:prod
+```
 
 ## Troubleshooting
 
+### ThirdwebProvider Error
+
+If you're still getting the "useActiveAccount should be used within ThirdwebProvider" error:
+
+1. **Check Environment Variables**: Ensure the environment variables are properly set in your EAS build configuration.
+
+2. **Clear Build Cache**: Sometimes build cache can cause issues:
+
+   ```bash
+   eas build --clear-cache
+   ```
+
+3. **Check Console Logs**: The updated code now includes better logging. Check the console output for:
+
+   - "Thirdweb Environment Check" logs
+   - "useActiveAccount error" logs
+
+4. **Verify ThirdwebProvider**: The app now uses a `ThirdwebWrapper` component that provides better error handling.
+
 ### Common Issues
 
-1. **EAS CLI not found**:
+1. **Environment Variables Not Loading**: Make sure your `.env` file is in the project root and not gitignored.
+
+2. **Build Configuration**: Ensure your `eas.json` includes the environment variables for all build profiles.
+
+3. **Thirdweb Version**: The app uses thirdweb v5.105.21. Make sure all dependencies are compatible.
+
+## Testing
+
+After making these changes:
+
+1. Test locally first:
 
    ```bash
-   npm install -g @expo/eas-cli
+   npm start
    ```
 
-2. **Build fails with permission errors**:
+2. Build a preview version:
 
    ```bash
-   sudo chown -R $(whoami) ~/.expo
+   npm run build:preview
    ```
 
-3. **iOS build requires specific Xcode version**:
+3. Submit to TestFlight:
+   ```bash
+   eas submit --platform ios
+   ```
 
-   - Check your Xcode version: `xcodebuild -version`
-   - Update if needed through App Store
+The updated code includes:
 
-4. **Android build fails**:
-   - Ensure Android SDK is properly configured
-   - Check ANDROID_HOME environment variable
-   - Verify Java/JDK installation
-
-### Build Optimization
-
-- Use `--clear-cache` flag if builds are failing due to cache issues
-- Use `--no-wait` flag to run builds in background
-- Monitor build logs for specific error messages
-
-## Configuration Files
-
-- `app.json`: Main app configuration with build profiles
-- `eas.json`: EAS Build specific configuration
-- `package.json`: Build scripts and dependencies
-
-## Next Steps
-
-1. Update the `projectId` in `app.json` with your actual Expo project ID
-2. Configure your development environment for the target platforms
-3. Run your first local build using the appropriate script
-
-For more information, visit the [EAS Build documentation](https://docs.expo.dev/build/introduction/).
+- Better error handling for `useActiveAccount`
+- Environment variable validation
+- Graceful fallbacks for missing credentials
+- Improved logging for debugging

@@ -7,11 +7,13 @@ const { width } = Dimensions.get("window");
 interface TransactionProgressProps {
   currentStep: string;
   ticketQuantity: number;
+  cta?: string;
 }
 
 function TransactionProgress({
   currentStep,
   ticketQuantity,
+  cta,
 }: TransactionProgressProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -143,7 +145,11 @@ function TransactionProgress({
         {/* Ticket Quantity Info */}
         <View style={styles.quantityInfo}>
           <Text style={styles.quantityText}>
-            Purchasing {ticketQuantity} ticket{ticketQuantity > 1 ? "s" : ""}
+            {cta
+              ? cta
+              : `Purchasing ${ticketQuantity} ticket${
+                  ticketQuantity > 1 ? "s" : ""
+                }`}
           </Text>
         </View>
       </LinearGradient>

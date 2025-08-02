@@ -1,18 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Header from "../../components/Header";
 
-import { wallets } from "@/components/ThirdwebScreen";
-import { chain, client } from "@/constants/thirdweb";
 import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
 } from "react-native-reanimated";
-import { etherlink } from "thirdweb/chains";
-import { useAutoConnect } from "thirdweb/react";
 
 // This is the default configuration
 configureReanimatedLogger({
@@ -21,18 +16,6 @@ configureReanimatedLogger({
 });
 
 export default function TabLayout() {
-  const { data } = useAutoConnect({
-    client: client,
-    wallets: wallets,
-    chain,
-    accountAbstraction: {
-      chain: etherlink,
-      sponsorGas: true,
-    },
-  });
-
-  console.log("autoconnect", data);
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
       <Tabs
@@ -40,6 +23,7 @@ export default function TabLayout() {
           tabBarPosition: "bottom",
           tabBarStyle: {
             height: 55,
+
             backgroundColor: "#1a1a1a",
           },
           headerShown: true,
@@ -48,7 +32,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: "#ffffff",
           tabBarInactiveTintColor: "#808080",
           tabBarItemStyle: {
-            paddingVertical: Platform.OS === "android" ? 8 : 0,
+            paddingVertical: 8,
           },
         }}
       >
