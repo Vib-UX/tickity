@@ -71,6 +71,7 @@ function NFTModalYourEvent({
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={onClose}
+      key={transactionHash}
     >
       <SafeAreaView style={styles.container}>
         <LinearGradient
@@ -79,7 +80,9 @@ function NFTModalYourEvent({
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>🎉 Purchase Successful!</Text>
+            <Text style={styles.headerTitle}>
+              🎉 Checked In event Poap minted
+            </Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
@@ -112,12 +115,9 @@ function NFTModalYourEvent({
 
             {/* Success Message */}
             <View style={styles.successMessage}>
-              <Text style={styles.successTitle}>
-                {ticketQuantity} Ticket{ticketQuantity > 1 ? "s" : ""} Minted!
-              </Text>
+              <Text style={styles.successTitle}>Poap minted</Text>
               <Text style={styles.successSubtitle}>
-                Your ticket{ticketQuantity > 1 ? "s" : ""} have been minted as
-                NFT{ticketQuantity > 1 ? "s" : ""} and sent to your wallet
+                Your event Poap has been minted and sent to your wallet
               </Text>
             </View>
 
@@ -163,14 +163,13 @@ function NFTModalYourEvent({
               <View style={styles.instructionItem}>
                 <Text style={styles.instructionNumber}>1</Text>
                 <Text style={styles.instructionText}>
-                  Check your wallet for the ticket NFT
-                  {ticketQuantity > 1 ? "s" : ""}
+                  Check your wallet for the event Poap
                 </Text>
               </View>
               <View style={styles.instructionItem}>
                 <Text style={styles.instructionNumber}>2</Text>
                 <Text style={styles.instructionText}>
-                  Present your NFT at the event entrance
+                  Present your event Poap at the event entrance
                 </Text>
               </View>
               <View style={styles.instructionItem}>

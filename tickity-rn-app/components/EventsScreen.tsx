@@ -1,4 +1,3 @@
-import { client } from "@/constants/thirdweb";
 import useGetEvents from "@/hooks/useGetEvents";
 import { Event } from "@/types/event";
 import { format } from "date-fns";
@@ -15,13 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAutoConnect } from "thirdweb/react";
 const { width, height } = Dimensions.get("window");
 
 const EventsScreen = () => {
-  useAutoConnect({
-    client: client,
-  });
   const { data, isLoading, error, refetch } = useGetEvents();
   const router = useRouter();
 

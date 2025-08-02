@@ -1,4 +1,5 @@
 import useGetUserEvents from "@/hooks/useGetUserEvents";
+import useRefreshOnFocus from "@/hooks/useRefetchFocus";
 import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -18,8 +19,11 @@ const { width } = Dimensions.get("window");
 
 const YourEventsScreen = () => {
   const { data, isLoading, error, refetch } = useGetUserEvents();
-  console.log("error", error);
   const router = useRouter();
+
+  useRefreshOnFocus(async () => {
+    refetch();
+  });
 
   const renderEventItem = ({ item }: { item: any }) => {
     const { hasTickets, ticketCount } = item;

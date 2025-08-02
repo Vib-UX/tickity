@@ -3,7 +3,6 @@ import SignInBottomSheet, {
 } from "@/components/bottomsheet/SignInBottomSheet";
 import NFTModalYourEvent from "@/components/NFTModalYourEvent";
 import TransactionProgress from "@/components/TransactionProgress";
-import { API_URL } from "@/constants/addresses";
 import { chain, client } from "@/constants/thirdweb";
 import useGetUserEvents from "@/hooks/useGetUserEvents";
 import { Event } from "@/types/event";
@@ -89,6 +88,8 @@ const YourEventPage = () => {
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [displayNftImage, setDisplayNftImage] = useState("");
+  const [imageUploadError, setImageUploadError] = useState(false);
+  const [imageUploadRetrying, setImageUploadRetrying] = useState(false);
   const { mutateAsync: sendCalls } = useSendCalls();
   const event = useMemo(() => {
     if (!data || !eventId) return null;
@@ -246,9 +247,7 @@ const YourEventPage = () => {
       setShowDistanceWarning(false);
       Alert.alert(
         "Location Verified",
-        `You are ${Math.round(
-          distance
-        )}m from the event. Location verified successfully!`
+        `Your location has been verified successfully!`
       );
       // } else {
       //   // Show UI that user needs to be within 100m
@@ -310,18 +309,47 @@ const YourEventPage = () => {
         type: "image/jpeg",
       } as any);
 
-      const uploadResponse = await fetch(API_URL, {
-        method: "POST",
-        body: formData,
-      });
+      // Add event details to the form data
+      formData.append("eventName", event?.name || "Unknown Event");
+      formData.append(
+        "eventDescription",
+        event?.description || "Event description not available"
+      );
+      formData.append(
+        "eventOrganizer",
+        event?.organizer || "Unknown Organizer"
+      );
+      formData.append("eventTheme", "blockchain, innovation, Tezos, Etherlink");
+      formData.append("eventLocation", event?.location || "Virtual (Online)");
+      formData.append(
+        "eventDate",
+        event?.startTime ? formatDate(event.startTime) : "Coming Soon"
+      );
+
+      const uploadResponse = await fetch(
+        "https://tickity-production.up.railway.app/analyze-image-ghibli",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (uploadResponse.ok) {
         const result = await uploadResponse.json();
+        setImageUploadError(false);
         return result.result;
       } else {
+        console.error(
+          "Upload failed:",
+          uploadResponse.status,
+          uploadResponse.statusText
+        );
+        setImageUploadError(true);
         return null;
       }
     } catch (error) {
+      console.error("Upload error:", error);
+      setImageUploadError(true);
       throw new Error("Failed to upload image");
     }
   };
@@ -340,6 +368,7 @@ const YourEventPage = () => {
 
       if (selfieImage) {
         setCurrentStep("Uploading check-in photo...");
+        setImageUploadError(false);
         const imageUrl = await uploadImage(selfieImage);
         if (imageUrl === null) {
           throw new Error("Failed to upload image");
@@ -372,7 +401,7 @@ const YourEventPage = () => {
         error.message.includes("Failed to get user operation receipt")
       ) {
         setCurrentStep("Fetching user operations...");
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, 10000));
         const logs = await getContractEvents({
           contract: eventContract,
           events: [
@@ -424,6 +453,7 @@ const YourEventPage = () => {
             toBlock: "latest",
           },
         });
+        console.log("logs", logs);
         const latestLog = logs[0].transactionHash;
         const tx = logs[logs.length - 1];
         console.log({
@@ -433,7 +463,7 @@ const YourEventPage = () => {
         if (tx.transactionHash) {
           setTransactionHash(tx.transactionHash);
           setCurrentStep("Finalizing your ticket usage...");
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           setTransactionState("success");
           setTransactionError("");
           setShowNFTModal(true);
@@ -571,7 +601,9 @@ const YourEventPage = () => {
           eventName={event?.name}
           ticketQuantity={1}
           transactionHash={transactionHash}
-          onRefetch={() => {}}
+          onRefetch={() => {
+            refetchEventStoredData();
+          }}
         />
         <ScrollView
           style={styles.scrollView}
@@ -1102,7 +1134,11 @@ const YourEventPage = () => {
       {/* Full Screen Transaction Progress Overlay */}
       {transactionState === "loading" && (
         <View style={styles.fullScreenTransactionOverlay}>
-          <TransactionProgress currentStep={currentStep} ticketQuantity={1} />
+          <TransactionProgress
+            currentStep={currentStep}
+            ticketQuantity={1}
+            cta="Checking you into the event"
+          />
         </View>
       )}
 
@@ -1139,6 +1175,68 @@ const YourEventPage = () => {
             >
               <Text style={styles.closeErrorButtonText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Full Screen Image Upload Error Overlay */}
+      {imageUploadError && (
+        <View style={styles.fullScreenErrorOverlay}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIconContainer}>
+              <Text style={styles.errorIcon}>📷</Text>
+            </View>
+            <Text style={styles.errorTitle}>Image Upload Failed</Text>
+            <Text style={styles.errorDescription}>
+              We couldn't upload your check-in photo. This might be due to a
+              network issue or server problem. Please try again.
+            </Text>
+
+            <View style={styles.imageUploadErrorActions}>
+              <TouchableOpacity
+                style={[
+                  styles.retryImageUploadButton,
+                  imageUploadRetrying && styles.retryImageUploadButtonDisabled,
+                ]}
+                onPress={handleCompleteCheckout}
+                disabled={imageUploadRetrying}
+              >
+                <LinearGradient
+                  colors={
+                    imageUploadRetrying
+                      ? ["#666666", "#444444"]
+                      : ["#22c55e", "#16a34a"]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.retryImageUploadGradient}
+                >
+                  {imageUploadRetrying ? (
+                    <View style={styles.retryImageUploadButtonLoading}>
+                      <ActivityIndicator size="small" color="#ffffff" />
+                      <Text style={styles.retryImageUploadButtonText}>
+                        Uploading...
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.retryImageUploadButtonText}>
+                      Retry Upload
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelImageUploadButton}
+                onPress={() => {
+                  setImageUploadError(false);
+                  setTransactionState("idle");
+                  setCurrentStep("");
+                }}
+              >
+                <Text style={styles.cancelImageUploadButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -2495,5 +2593,58 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 18,
     fontWeight: "600",
+  },
+  // Image Upload Error Styles
+  imageUploadErrorActions: {
+    width: "100%",
+    gap: 12,
+    marginTop: 20,
+  },
+  retryImageUploadButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    width: "100%",
+  },
+  retryImageUploadButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryImageUploadGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  retryImageUploadButtonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  retryImageUploadButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  cancelImageUploadButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  cancelImageUploadButtonText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });

@@ -1,9 +1,12 @@
 import useGetUSDTBalance from "@/hooks/useGetUSDTBalance";
+import useRefreshOnFocus from "@/hooks/useRefetchFocus";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -51,8 +54,26 @@ let isLoggedIn = false;
 
 export default function AccountScreen() {
   const account = useActiveAccount();
-  const { balance: usdtBalance, isLoading: isLoadingBalance } =
-    useGetUSDTBalance();
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const {
+    balance: usdtBalance,
+    isLoading: isLoadingBalance,
+    refetch,
+  } = useGetUSDTBalance();
+
+  useRefreshOnFocus(async () => {
+    refetch();
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -72,6 +93,14 @@ export default function AccountScreen() {
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#22c55e"
+              colors={["#22c55e"]}
+            />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Account</Text>
@@ -116,21 +145,79 @@ export default function AccountScreen() {
               <View style={styles.quickActionsCard}>
                 <Text style={styles.quickActionsTitle}>Quick Actions</Text>
                 <View style={styles.quickActionsGrid}>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => router.push("/(tabs)/favourites")}
+                  >
                     <Text style={styles.quickActionIcon}>🎫</Text>
                     <Text style={styles.quickActionText}>My Tickets</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => router.push("/(tabs)/explore")}
+                  >
                     <Text style={styles.quickActionIcon}>📅</Text>
                     <Text style={styles.quickActionText}>My Events</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => {
+                      // TODO: Navigate to settings when available
+                      console.log("Settings pressed");
+                    }}
+                  >
                     <Text style={styles.quickActionIcon}>⚙️</Text>
                     <Text style={styles.quickActionText}>Settings</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.quickActionButton}>
+                  <TouchableOpacity
+                    style={styles.quickActionButton}
+                    onPress={() => {
+                      // TODO: Navigate to help when available
+                      console.log("Help pressed");
+                    }}
+                  >
                     <Text style={styles.quickActionIcon}>❓</Text>
                     <Text style={styles.quickActionText}>Help</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Recent Activity */}
+              <View style={styles.recentActivityCard}>
+                <Text style={styles.recentActivityTitle}>Recent Activity</Text>
+                <View style={styles.recentActivityList}>
+                  <TouchableOpacity
+                    style={styles.recentActivityItem}
+                    onPress={() => router.push("/(tabs)/explore")}
+                  >
+                    <View style={styles.recentActivityIconContainer}>
+                      <Text style={styles.recentActivityIcon}>🎉</Text>
+                    </View>
+                    <View style={styles.recentActivityContent}>
+                      <Text style={styles.recentActivityTitle}>
+                        View All Events
+                      </Text>
+                      <Text style={styles.recentActivitySubtitle}>
+                        Discover and attend events
+                      </Text>
+                    </View>
+                    <Text style={styles.recentActivityArrow}>→</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.recentActivityItem}
+                    onPress={() => router.push("/(tabs)/favourites")}
+                  >
+                    <View style={styles.recentActivityIconContainer}>
+                      <Text style={styles.recentActivityIcon}>🎫</Text>
+                    </View>
+                    <View style={styles.recentActivityContent}>
+                      <Text style={styles.recentActivityTitle}>My Tickets</Text>
+                      <Text style={styles.recentActivitySubtitle}>
+                        View your purchased tickets
+                      </Text>
+                    </View>
+                    <Text style={styles.recentActivityArrow}>→</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -366,5 +453,56 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
     maxWidth: 280,
+  },
+  // Recent Activity Styles
+  recentActivityCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  recentActivityTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 14,
+  },
+  recentActivityList: {
+    gap: 12,
+  },
+  recentActivityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  recentActivityIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  recentActivityIcon: {
+    fontSize: 20,
+  },
+  recentActivityContent: {
+    flex: 1,
+  },
+  recentActivitySubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
+    marginTop: 2,
+  },
+  recentActivityArrow: {
+    fontSize: 18,
+    color: "rgba(255, 255, 255, 0.5)",
+    fontWeight: "600",
   },
 });
