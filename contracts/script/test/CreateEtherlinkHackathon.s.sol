@@ -8,11 +8,11 @@ import "../../src/Event.sol";
 import "../../src/IUSDT.sol";
 
 contract CreateEtherlinkHackathon is Script {
-    // Contract addresses from latest deployment
-    address constant EVENT_FACTORY = 0x3b082F6Ea285761f862608f28Ff420a8592201Cd;
-    address constant TICKITY_NFT = 0x39a450990A9A778172201f1CFC0e205E5D0B15d4;
-    address constant POAP_CONTRACT = 0x82C2B08463706885C5e92A6317bF81b01e70A1c2;
-    address constant USDT_CONTRACT = 0x4b0bfE8F6391F5F3187008B5b8C38C3d3A2b8bD1; // Mock USDT on Etherlink
+    // Contract addresses from latest deployment (with msg.sender fix)
+    address constant EVENT_FACTORY = 0xa3e46640755727Ddf917Bd9F1430308d5Facc6EF;
+    address constant TICKITY_NFT = 0xBA90Fddf9AC55d2BE1A7bE92058e2c54B80899bA;
+    address constant POAP_CONTRACT = 0x679FA9d4830238913213b8ae49DcCdC95A43AcFC;
+    address constant USDT_CONTRACT = 0xf7f007dc8Cb507e25e8b7dbDa600c07FdCF9A75B; // USDT contract from latest deployment
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
