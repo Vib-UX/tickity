@@ -39,7 +39,7 @@ contract TickityTest is Test {
         vm.startPrank(owner);
         usdtContract = new MockUSDT();
         nftContract = new TickityNFT();
-        factoryContract = new EventFactory(address(usdtContract));
+        factoryContract = new EventFactory(address(usdtContract), address(0)); // No POAP for tests
         marketplaceContract = new TickityMarketplace(address(nftContract), address(usdtContract));
         // Transfer NFT ownership to factory for tests
         nftContract.transferOwnership(address(factoryContract));

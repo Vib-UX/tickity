@@ -32,33 +32,13 @@ contract VerifyAddresses is Script {
         console.log("POAP Contract Address:", testEvent.poapContract());
         console.log("");
 
-        // Check POAP event details for event ID 5
-        console.log("POAP Event Details for Event ID 5:");
-        try poapContract.getPOAPEvent(2) returns (uint256 eventId, string memory name, string memory description, string memory imageURI, string memory poapURI, bool isActive, address eventContract, address organizer, uint256 minted, uint256 createdAt) {
-            console.log("Event ID:", eventId);
-            console.log("Name:", name);
-            console.log("Event Contract:", eventContract);
-            console.log("Is Active:", isActive);
-            console.log("POAPs Minted:", minted);
-            console.log("");
-            
-            // Check if addresses match
-            console.log("Address Verification:");
-            console.log("Event Address:", eventAddress);
-            console.log("POAP Event Contract:", eventContract);
-            console.log("Addresses Match:", eventAddress == eventContract ? "YES" : "NO");
-        } catch {
-            console.log("Error getting POAP event details");
-        }
+        // Check POAP contract details
+        console.log("POAP Contract Details:");
+        console.log("Total POAPs minted:", poapContract.totalPOAPs());
         console.log("");
-
-        // Check if user has claimed POAP for event ID 5
-        address user = msg.sender;
-        bool hasClaimed = poapContract.hasUserClaimedPOAP(5, user);
-        console.log("User has claimed POAP for event ID 5:", hasClaimed ? "YES" : "NO");
-        console.log("");
-
+        
         // Check user's POAPs
+        address user = msg.sender;
         uint256[] memory userPOAPs = poapContract.getUserPOAPs(user);
         console.log("User's POAPs:", userPOAPs.length);
         console.log("");
@@ -72,12 +52,9 @@ contract VerifyAddresses is Script {
         }
         console.log("");
 
-        // Check again if user has claimed POAP
-        hasClaimed = poapContract.hasUserClaimedPOAP(5, user);
-        console.log("User has claimed POAP for event ID 5 (after ticket usage):", hasClaimed ? "YES" : "NO");
-        
-        userPOAPs = poapContract.getUserPOAPs(user);
-        console.log("User's POAPs (after ticket usage):", userPOAPs.length);
+        // Check user's POAPs after ticket usage
+        uint256[] memory userPOAPsAfter = poapContract.getUserPOAPs(user);
+        console.log("User's POAPs (after ticket usage):", userPOAPsAfter.length);
         console.log("");
 
         vm.stopBroadcast();
