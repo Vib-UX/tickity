@@ -9,6 +9,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,9 +17,126 @@ import {
 } from "react-native";
 const { width, height } = Dimensions.get("window");
 
+// Mock data for categories
+const categories = [
+  { id: "1", name: "AI", icon: "🧠", color: "#FF69B4" },
+  { id: "2", name: "Arts & Culture", icon: "🎨", color: "#90EE90" },
+  { id: "3", name: "Climate", icon: "🌍", color: "#90EE90" },
+  { id: "4", name: "Technology", icon: "💻", color: "#87CEEB" },
+  { id: "5", name: "Music", icon: "🎵", color: "#DDA0DD" },
+  { id: "6", name: "Sports", icon: "⚽", color: "#F0E68C" },
+];
+
+// Mock data for cities
+const cities = [
+  {
+    id: "1",
+    name: "Mumbai",
+    image:
+      "https://images.unsplash.com/photo-1710582307396-5ca7b4390aa8?q=80&w=1867&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    icon: "🏛️",
+  },
+  {
+    id: "2",
+    name: "Bengaluru",
+    image:
+      "https://images.unsplash.com/photo-1565018054866-968e244671af?q=80&w=2679&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    icon: "🏛️",
+  },
+  {
+    id: "3",
+    name: "Delhi",
+    image:
+      "https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400&h=200&fit=crop",
+    icon: "🏛️",
+  },
+  {
+    id: "4",
+    name: "Chennai",
+    image:
+      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=400&h=200&fit=crop",
+    icon: "🏛️",
+  },
+];
+
+// Mock data for featured calendars
+const featuredCalendars = [
+  {
+    id: "1",
+    title: "Reading Rhythms Global",
+    description:
+      "Not a book club. A reading party. Read with friends to live music & curated playlists.",
+    icon: "📚",
+  },
+  {
+    id: "2",
+    title: "ADPList",
+    description:
+      "Your favorite all-things happening at ADPList! We feature local meetups, ADPList events, and more.",
+    icon: "😊",
+  },
+  {
+    id: "3",
+    title: "Tech Meetups",
+    description:
+      "Discover the latest in technology with local tech enthusiasts and industry experts.",
+    icon: "💻",
+  },
+];
+
 const EventsScreen = () => {
   const { data, isLoading, error, refetch } = useGetEvents();
   const router = useRouter();
+
+  const renderCategoryItem = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.categoryCard}>
+      <View style={[styles.categoryIcon, { backgroundColor: item.color }]}>
+        <Text style={styles.categoryIconText}>{item.icon}</Text>
+      </View>
+      <Text style={styles.categoryName}>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderCityItem = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.cityCard}>
+      <Image source={{ uri: item.image }} style={styles.cityImage} />
+      <View style={styles.cityOverlay}>
+        <View style={styles.cityIconContainer}>
+          <Text style={styles.cityIcon}>{item.icon}</Text>
+        </View>
+        <Text style={styles.cityName}>{item.name}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderFeaturedCalendarItem = ({ item }: { item: Event }) => (
+    <TouchableOpacity
+      style={styles.calendarCard}
+      onPress={() => router.push(`/${item.eventAddress}`)}
+    >
+      <View style={styles.calendarImageContainer}>
+        <Image
+          source={{
+            uri: item.image,
+          }}
+          style={styles.calendarImage}
+          resizeMode="cover"
+        />
+      </View>
+      <View style={styles.calendarInfo}>
+        <Text style={styles.calendarTitle}>
+          {item.name || `Event #${item.eventAddress}`}
+        </Text>
+        <Text style={styles.calendarDescription} numberOfLines={2}>
+          {item.description || "Amazing event experience awaits you"}
+        </Text>
+        <Text style={styles.calendarDate}>
+          {format(new Date(Number(item.startTime) * 1000), "MMM d, yyyy") ||
+            "Coming Soon"}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   const renderEventItem = ({ item }: { item: Event }) => (
     <TouchableOpacity style={styles.eventCard}>
@@ -81,40 +199,78 @@ const EventsScreen = () => {
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      <View style={styles.content}>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ffffff" />
-            <Text style={styles.loadingText}>Loading events...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Error loading events</Text>
-          </View>
-        ) : (
-          <View style={styles.eventsContainer}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.content}>
+          {/* Categories Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Categories</Text>
             <FlatList
-              data={(data as any)?.eventCreateds || []}
-              renderItem={renderEventItem}
-              onRefresh={refetch}
-              refreshing={isLoading}
-              ListHeaderComponent={() => (
-                <View style={styles.eventsHeader}>
-                  <Text style={styles.eventsTitle}>Discover Events</Text>
-                  <Text style={styles.eventsSubtitle}>
-                    Discover amazing events happening around you
-                  </Text>
-                </View>
-              )}
+              data={categories}
+              renderItem={renderCategoryItem}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesList}
               keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.flatListContent}
-              ListEmptyComponent={renderEmptyState}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
             />
           </View>
-        )}
-      </View>
+
+          {/* Cities Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Cities</Text>
+              <TouchableOpacity style={styles.viewAllButton}>
+                <Text style={styles.viewAllText}>View All</Text>
+                <Text style={styles.viewAllArrow}>→</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={cities}
+              renderItem={renderCityItem}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.citiesList}
+              keyExtractor={(item) => item.id}
+            />
+          </View>
+
+          {/* Featured Calendars Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Featured Events</Text>
+            <Text style={styles.sectionSubtitle}>That We Love</Text>
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#ffffff" />
+                <Text style={styles.loadingText}>
+                  Loading featured events...
+                </Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>
+                  Error loading featured events
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={(data as any)?.eventCreateds?.slice(0, 3) || []}
+                renderItem={renderFeaturedCalendarItem}
+                horizontal={false}
+                scrollEnabled={false}
+                contentContainerStyle={styles.calendarsList}
+                keyExtractor={(item) => item.id}
+                ListEmptyComponent={() => (
+                  <Text style={styles.emptyStateText}>
+                    No featured events available
+                  </Text>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </ScrollView>
     </LinearGradient>
   );
 };
@@ -125,108 +281,175 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
-    flex: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 100,
   },
-  header: {
+  section: {
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-  },
-  title: {
-    fontSize: 28,
-    color: "#ffffff",
-    fontWeight: "300",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  appName: {
-    fontSize: 48,
-    color: "#ffffff",
-    fontWeight: "bold",
     marginBottom: 16,
-    textAlign: "center",
-    letterSpacing: 2,
   },
-  subtitle: {
-    fontSize: 18,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "400",
-    textAlign: "center",
-  },
-  buttonContainer: {
-    width: "100%",
-    alignItems: "center",
-    gap: 16,
-  },
-  signInButton: {
-    backgroundColor: "#ffffff",
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    width: width * 0.7,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  signInButtonText: {
-    color: "#667eea",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  exploreButton: {
-    backgroundColor: "transparent",
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    width: width * 0.7,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.6)",
-  },
-  exploreButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  eventsContainer: {
-    flex: 1,
-    width: "100%",
-  },
-  eventsHeader: {
-    alignItems: "flex-start",
-    marginBottom: 24,
-    marginTop: 10,
-  },
-  eventsTitle: {
-    fontSize: 20,
+  sectionTitle: {
+    fontSize: 24,
     color: "#ffffff",
     fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "left",
-    letterSpacing: 0.5,
+    marginBottom: 10,
   },
-  eventsSubtitle: {
+  sectionSubtitle: {
     fontSize: 14,
-    color: "rgba(255, 255, 255, 0.7)",
-    lineHeight: 20,
+    color: "rgba(255, 255, 255, 0.6)",
+    marginBottom: 16,
   },
-  flatListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginRight: 4,
+  },
+  viewAllArrow: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+
+  // Categories styles
+  categoriesList: {
+    paddingRight: 16,
+  },
+  categoryCard: {
+    alignItems: "center",
+    marginRight: 20,
+    width: 80,
+  },
+  categoryIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  categoryIconText: {
+    fontSize: 24,
+  },
+  categoryName: {
+    fontSize: 12,
+    color: "#ffffff",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+
+  // Cities styles
+  citiesList: {
+    paddingRight: 16,
+  },
+  cityCard: {
+    width: 160,
+    height: 100,
+    marginRight: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  cityImage: {
+    width: "100%",
+    height: "100%",
+  },
+  cityOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    padding: 12,
+  },
+  cityIconContainer: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+  },
+  cityIcon: {
+    fontSize: 16,
+    color: "#ffffff",
+  },
+  cityName: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+
+  // Featured Calendars styles
+  calendarsList: {
+    gap: 16,
+  },
+  calendarCard: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  calendarImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: 12,
+  },
+  calendarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  calendarInfo: {
+    flex: 1,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  calendarDescription: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.7)",
+    lineHeight: 16,
+  },
+  calendarDate: {
+    fontSize: 11,
+    color: "rgba(255, 255, 255, 0.5)",
+    marginTop: 4,
+    fontWeight: "500",
+  },
+
+  // Events section styles
+  eventsSection: {
+    marginTop: 16,
+  },
+  eventsList: {
+    gap: 12,
   },
   eventCard: {
     borderRadius: 12,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.15)",
     overflow: "hidden",
-    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   eventCardContent: {
     flex: 1,
@@ -238,14 +461,6 @@ const styles = StyleSheet.create({
   eventImage: {
     width: "100%",
     height: "100%",
-  },
-  eventImageOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
   eventInfo: {
     padding: 16,
@@ -312,9 +527,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   loadingContainer: {
-    flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 40,
     gap: 16,
   },
   loadingText: {
@@ -322,9 +537,9 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.8)",
   },
   errorContainer: {
-    flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 40,
   },
   errorText: {
     fontSize: 14,

@@ -7,6 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
         "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
@@ -24,6 +27,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
         "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
@@ -31,6 +37,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_THIRDWEB_CLIENT_ID": "e815b7bc8066484753033e49b5f637f8",
         "EXPO_PUBLIC_THIRDWEB_SECRET_KEY": "TLTWULf6K5QRGeh9Oh3nmeoqXRBJmCBMUy9B_RCid_NfmRSjV85xIYXmRmBwQKZ0ApGZAPOdfw0psbKEUm5mcA"
