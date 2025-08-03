@@ -72,10 +72,9 @@ sequenceDiagram
 ## Tech Stack
 
 - **Blockchain**: Etherlink (Tezos Layer 2)
-- **Smart Contracts**: Thirdweb SDK
+- **Smart Contracts**: Thirdweb SDK/Foundry
 - **Oracle Integration**: Redstone Protocol
-- **Identity**: World ID, zkEmail, Lit Protocol
-- **Storage**: IPFS, Arweave
+- **Storage**: IPFS
 - **Indexing**: Goldsky Subgraph
 - **AR/AI**: Custom mobile implementation
 - **Frontend**: Mobile-first React Native/Flutter
