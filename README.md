@@ -14,7 +14,6 @@ NFT ticketing platform with Geofencing, AR & AI integration built on Etherlink.
 - **Organizer Dashboard** - Event management and analytics
 - **Cross-Platform** - Discord/Telegram automation and deep linking
 
-
 ## User Flow
 
 ```mermaid
@@ -79,3 +78,28 @@ sequenceDiagram
 - **AR/AI**: Custom mobile implementation
 - **Frontend**: Mobile-first React Native/Flutter
 
+## SDK & Service Integrations
+
+> **Thirdweb SDK Integration :**
+>
+> - Using official Thirdweb SDK for:
+>   - Wallet connection and authentication ([thirdweb.ts](tickity-rn-app/constants/thirdweb.ts))
+>   - Smart contract interactions ([useGetUserTickets.tsx](tickity-rn-app/hooks/useGetUserTickets.tsx))
+>   - Chain configuration with etherlinkTestnet ([useGetUSDT.tsx](tickity-rn-app/hooks/useGetUSDT.tsx))
+>   - Event creation and management ([ThirdwebScreen.tsx](tickity-rn-app/components/ThirdwebScreen.tsx))
+
+> **Goldsky Subgraph Integration :**
+>
+> - Using Goldsky subgraph for:
+>   - Event data indexing and querying ([subgraph.ts](tickity-rn-app/constants/subgraph.ts))
+>   - Real-time event updates ([useGetEvents.tsx](tickity-rn-app/hooks/useGetEvents.tsx))
+>   - User event management ([useGetUserEvents.tsx](tickity-rn-app/hooks/useGetUserEvents.tsx))
+>   - Event filtering and search functionality ([EventsScreen.tsx](tickity-rn-app/components/EventsScreen.tsx))
+
+> **Redstone Oracle Integration :**
+>
+> - Using Redstone Protocol for:
+>   - Real-time price feeds ([EventFactoryWithPriceFeeds.sol](contracts/src/EventFactoryWithPriceFeeds.sol))
+>   - USDT/XTZ price data integration ([TestRedStoneIntegration.s.sol](contracts/script/test/TestRedStoneIntegration.s.sol))
+>   - Dynamic ticket pricing based on market conditions ([TestRedStoneXTZPrice.s.sol](contracts/script/test/TestRedStoneXTZPrice.s.sol))
+>   - Oracle data validation and fallback mechanisms
