@@ -59,31 +59,6 @@ const cities = [
   },
 ];
 
-// Mock data for featured calendars
-const featuredCalendars = [
-  {
-    id: "1",
-    title: "Reading Rhythms Global",
-    description:
-      "Not a book club. A reading party. Read with friends to live music & curated playlists.",
-    icon: "📚",
-  },
-  {
-    id: "2",
-    title: "ADPList",
-    description:
-      "Your favorite all-things happening at ADPList! We feature local meetups, ADPList events, and more.",
-    icon: "😊",
-  },
-  {
-    id: "3",
-    title: "Tech Meetups",
-    description:
-      "Discover the latest in technology with local tech enthusiasts and industry experts.",
-    icon: "💻",
-  },
-];
-
 const EventsScreen = () => {
   const { data, isLoading, error, refetch } = useGetEvents();
   const router = useRouter();
@@ -136,60 +111,6 @@ const EventsScreen = () => {
         </Text>
       </View>
     </TouchableOpacity>
-  );
-
-  const renderEventItem = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard}>
-      <View style={styles.eventCardContent}>
-        <View style={styles.eventImageContainer}>
-          <Image
-            source={{
-              uri: item.image,
-            }}
-            style={styles.eventImage}
-            resizeMode="cover"
-          />
-        </View>
-
-        <View style={styles.eventInfo}>
-          <Text style={styles.eventTitle}>
-            {item.name || `Event #${item.eventAddress}`}
-          </Text>
-          <Text style={styles.eventDescription}>
-            {item.description || "Amazing event experience awaits you"}
-          </Text>
-
-          <View style={styles.eventMetaRow}>
-            <View style={styles.eventMetaItem}>
-              <Text style={styles.eventMetaLabel}>Date</Text>
-              <Text style={styles.eventMetaValue}>
-                {format(
-                  new Date(Number(item.startTime) * 1000),
-                  "MMM d, yyyy"
-                ) || "Coming Soon"}
-              </Text>
-            </View>
-            <View style={styles.eventMetaItem}>
-              <Text style={styles.eventMetaLabel}>ID</Text>
-              <Text style={styles.eventMetaValue}>#{item.id.slice(-6)}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.viewDetailsButton}
-            onPress={() => router.push(`/${item.eventAddress}`)}
-          >
-            <Text style={styles.viewDetailsButtonText}>View Details</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateText}>No events found</Text>
-    </View>
   );
 
   return (
@@ -255,7 +176,7 @@ const EventsScreen = () => {
               </View>
             ) : (
               <FlatList
-                data={(data as any)?.eventCreateds?.slice(0, 3) || []}
+                data={(data as any)?.eventCreateds || []}
                 renderItem={renderFeaturedCalendarItem}
                 horizontal={false}
                 scrollEnabled={false}
