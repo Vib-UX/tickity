@@ -102,13 +102,6 @@ export default function AccountScreen() {
             />
           }
         >
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Account</Text>
-            <Text style={styles.headerSubtitle}>
-              Manage your wallet and preferences
-            </Text>
-          </View>
-
           {account ? (
             <View style={styles.accountContainer}>
               {/* Wallet Info Card */}
