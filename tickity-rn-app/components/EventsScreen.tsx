@@ -30,6 +30,27 @@ const categories = [
 // Mock data for cities
 const cities = [
   {
+    id: "3",
+    name: "San Francisco",
+    image:
+      "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    icon: "🌉",
+  },
+  {
+    id: "4",
+    name: "London",
+    image:
+      "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    icon: "🏰",
+  },
+  {
+    id: "5",
+    name: "New York",
+    image:
+      "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    icon: "🗽",
+  },
+  {
     id: "1",
     name: "Mumbai",
     image:
@@ -42,45 +63,6 @@ const cities = [
     image:
       "https://images.unsplash.com/photo-1565018054866-968e244671af?q=80&w=2679&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     icon: "🏛️",
-  },
-  {
-    id: "3",
-    name: "Delhi",
-    image:
-      "https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400&h=200&fit=crop",
-    icon: "🏛️",
-  },
-  {
-    id: "4",
-    name: "Chennai",
-    image:
-      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=400&h=200&fit=crop",
-    icon: "🏛️",
-  },
-];
-
-// Mock data for featured calendars
-const featuredCalendars = [
-  {
-    id: "1",
-    title: "Reading Rhythms Global",
-    description:
-      "Not a book club. A reading party. Read with friends to live music & curated playlists.",
-    icon: "📚",
-  },
-  {
-    id: "2",
-    title: "ADPList",
-    description:
-      "Your favorite all-things happening at ADPList! We feature local meetups, ADPList events, and more.",
-    icon: "😊",
-  },
-  {
-    id: "3",
-    title: "Tech Meetups",
-    description:
-      "Discover the latest in technology with local tech enthusiasts and industry experts.",
-    icon: "💻",
   },
 ];
 
@@ -136,60 +118,6 @@ const EventsScreen = () => {
         </Text>
       </View>
     </TouchableOpacity>
-  );
-
-  const renderEventItem = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard}>
-      <View style={styles.eventCardContent}>
-        <View style={styles.eventImageContainer}>
-          <Image
-            source={{
-              uri: item.image,
-            }}
-            style={styles.eventImage}
-            resizeMode="cover"
-          />
-        </View>
-
-        <View style={styles.eventInfo}>
-          <Text style={styles.eventTitle}>
-            {item.name || `Event #${item.eventAddress}`}
-          </Text>
-          <Text style={styles.eventDescription}>
-            {item.description || "Amazing event experience awaits you"}
-          </Text>
-
-          <View style={styles.eventMetaRow}>
-            <View style={styles.eventMetaItem}>
-              <Text style={styles.eventMetaLabel}>Date</Text>
-              <Text style={styles.eventMetaValue}>
-                {format(
-                  new Date(Number(item.startTime) * 1000),
-                  "MMM d, yyyy"
-                ) || "Coming Soon"}
-              </Text>
-            </View>
-            <View style={styles.eventMetaItem}>
-              <Text style={styles.eventMetaLabel}>ID</Text>
-              <Text style={styles.eventMetaValue}>#{item.id.slice(-6)}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.viewDetailsButton}
-            onPress={() => router.push(`/${item.eventAddress}`)}
-          >
-            <Text style={styles.viewDetailsButtonText}>View Details</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateText}>No events found</Text>
-    </View>
   );
 
   return (
@@ -255,7 +183,7 @@ const EventsScreen = () => {
               </View>
             ) : (
               <FlatList
-                data={(data as any)?.eventCreateds?.slice(0, 3) || []}
+                data={(data as any)?.eventCreateds || []}
                 renderItem={renderFeaturedCalendarItem}
                 horizontal={false}
                 scrollEnabled={false}
