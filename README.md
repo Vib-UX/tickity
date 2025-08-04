@@ -85,6 +85,7 @@ sequenceDiagram
 > - Using official Thirdweb SDK for:
 >   - Wallet connection and authentication ([thirdweb.ts](tickity-rn-app/constants/thirdweb.ts))
 >   - Smart contract interactions ([useGetUserTickets.tsx](tickity-rn-app/hooks/useGetUserTickets.tsx))
+>   - Batch Transactions [Approval USDT + Purchasing Ticket] ([sendBatchTxn](tickity-rn-app/app/%5Bevent%5D.tsx#L214))
 >   - Chain configuration with etherlinkTestnet ([useGetUSDT.tsx](tickity-rn-app/hooks/useGetUSDT.tsx))
 >   - Event creation and management ([ThirdwebScreen.tsx](tickity-rn-app/components/ThirdwebScreen.tsx))
 
