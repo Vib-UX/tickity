@@ -104,3 +104,38 @@ sequenceDiagram
 >   - USDT/XTZ price data integration ([TestRedStoneIntegration.s.sol](contracts/script/test/TestRedStoneIntegration.s.sol))
 >   - Dynamic ticket pricing based on market conditions ([TestRedStoneXTZPrice.s.sol](contracts/script/test/TestRedStoneXTZPrice.s.sol))
 >   - Oracle data validation and fallback mechanisms
+---
+
+## 🧾 Transaction Links + Ghiblified POAP 🎟️
+
+Here’s a quick overview of the onchain actions and resulting Ghibli-style POAP minting on **Etherlink Testnet**:
+
+---
+
+### 🎫 Purchase Ticket  
+- [View Transaction →](https://testnet.explorer.etherlink.com/tx/0x903e4cac30c7a0eca3efdf2cec48307980163173a1e86424e870d398e722c985)  
+User purchases an event ticket onchain.
+
+---
+
+### 🪄 useTicket & POAP Minting  
+- [View Transaction →](https://testnet.explorer.etherlink.com/tx/0x90d710aa415e34e9034933b588f1378f4c1fc39728381b06a923a50578ad55e8)  
+Ticket is validated and a **POAP (Proof of Attendance Protocol)** NFT is minted for the attendee.
+
+---
+
+### 📅 Create Event  
+- [View Transaction →](https://testnet.explorer.etherlink.com/tx/0xec33a5d08e0c6953149d84bf247d75f8cce1899a00e8478095b2ea817f9eb816)  
+Organizer creates the event metadata and pushes it onchain.
+
+---
+
+### 🖼️ Ghiblified POAP NFT  
+A uniquely styled **Ghibli-inspired POAP** minted to the attendee wallet:
+
+<p align="center">
+  <img width="700" height="700" alt="Ghibli POAP" src="https://github.com/user-attachments/assets/c64ba7e8-bdda-4758-ad9e-667f25e0d59c" />
+</p>
+
+
+
